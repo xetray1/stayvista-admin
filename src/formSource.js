@@ -119,6 +119,7 @@ export const hotelInputs = [
     placeholder: "100",
   },
 ];
+
 export const roomInputs = [
   {
     id: "title",

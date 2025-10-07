@@ -1,4 +1,4 @@
-import apiClient from "./client";
+import apiClient from "./client.js";
 
 export const fetchCollection = async (resource, config = {}) => {
   const response = await apiClient.get(`/${resource}`, config);
@@ -16,7 +16,7 @@ export const fetchBookings = async (params = {}) => {
 };
 
 export const updateBookingStatus = async (bookingId, status) => {
-  const response = await apiClient.patch(`/bookings/${bookingId}/status`, { status });
+  const response = await apiClient.put(`/bookings/${bookingId}/status`, { status });
   return response.data;
 };
 
@@ -31,7 +31,7 @@ export const fetchLogs = async (params = {}) => {
 };
 
 const deletePathBuilders = {
-  rooms: async (id) => `/${"rooms"}/${id}`,
+  rooms: async (id) => `/rooms/${id}`,
   users: async (id) => `/users/${id}`,
 };
 

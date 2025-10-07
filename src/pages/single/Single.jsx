@@ -1,21 +1,11 @@
-import "./single.scss";
-import Sidebar from "../../components/sidebar/Sidebar";
-import Navbar from "../../components/navbar/Navbar";
-import List from "../../components/table/Table";
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
-import {
-  fetchCollection,
-  fetchResourceById,
-  updateUser,
-  resetUserPassword,
-  updateRoom,
-  uploadRoomImage,
-} from "../../api/services";
-import { AuthContext } from "../../context/AuthContext";
+import { createPortal } from "react-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { fetchResourceById, updateUser, resetUserPassword, updateRoom, uploadRoomImage } from "../../api/services.js";
+import { AuthContext } from "../../context/AuthContext.js";
+import LatestTransactionsTable from "../../components/table/LatestTransactionsTable.jsx";
 
-const PLACEHOLDER_IMAGE =
-  "https://icon-library.com/images/no-image-icon/no-image-icon-0.jpg";
+const PLACEHOLDER_IMAGE = "https://icon-library.com/images/no-image-icon/no-image-icon-0.jpg";
 const MAX_ROOM_IMAGES = 6;
 
 const normalizeRoom = (room = {}) => {
@@ -90,9 +80,7 @@ const formatLabel = (key) =>
     .replace(/^./, (str) => str.toUpperCase());
 
 const formatValue = (key, value) => {
-  if (value === undefined || value === null || value === "") {
-    return "—";
-  }
+  if (value === undefined || value === null || value === "") return "—";
 
   if (Array.isArray(value)) {
     if (key === "roomNumbers") {
@@ -101,63 +89,58 @@ const formatValue = (key, value) => {
         .filter(Boolean);
       return numbers.length ? numbers.join(", ") : "—";
     }
-    if (key === "photos") {
-      return `${value.length} photo${value.length === 1 ? "" : "s"}`;
-    }
+    if (key === "photos") return `${value.length} photo${value.length === 1 ? "" : "s"}`;
     return value.join(", ");
   }
 
-  if (typeof value === "boolean") {
-    return value ? "Yes" : "No";
-  }
+  if (typeof value === "boolean") return value ? "Yes" : "No";
 
   if (value && typeof value === "object") {
     if (key === "managedHotel") {
       const hotelName = value?.name || value?.title;
       const hotelCity = value?.city;
-      if (hotelName && hotelCity) {
-        return `${hotelName} · ${hotelCity}`;
-      }
-      if (hotelName) {
-        return hotelName;
-      }
-      if (value?._id) {
-        return value._id;
-      }
+      if (hotelName && hotelCity) return `${hotelName} · ${hotelCity}`;
+      if (hotelName) return hotelName;
+      if (value?._id) return value._id;
     }
 
-    if (value?._id && typeof value._id === "string") {
-      return value._id;
-    }
+    if (value?._id && typeof value._id === "string") return value._id;
 
     try {
       return JSON.stringify(value);
-    } catch (err) {
+    } catch {
       return String(value);
     }
   }
 
   if (key.toLowerCase().includes("date")) {
     const date = new Date(value);
-    if (!Number.isNaN(date.getTime())) {
-      return date.toLocaleString();
-    }
+    if (!Number.isNaN(date.getTime())) return date.toLocaleString();
   }
 
   return value;
 };
 
+const formatCurrency = (value) => {
+  if (value === undefined || value === null || value === "") return "—";
+  const numeric = Number(value);
+  if (Number.isNaN(numeric)) return value;
+  try {
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      maximumFractionDigits: 0,
+    }).format(numeric);
+  } catch {
+    return numeric.toLocaleString();
+  }
+};
+
 const derivePrimaryTitle = (resource, data) => {
   if (!data) return "";
-  if (resource === "users") {
-    return data.username || data.email || "User";
-  }
-  if (resource === "hotels") {
-    return data.name || data.title || "Hotel";
-  }
-  if (resource === "rooms") {
-    return data.title || "Room";
-  }
+  if (resource === "users") return data.username || data.email || "User";
+  if (resource === "hotels") return data.name || data.title || "Hotel";
+  if (resource === "rooms") return data.title || "Room";
   return data.name || data.title || "Details";
 };
 
@@ -167,12 +150,8 @@ const deriveSubTitle = (resource, data) => {
     const parts = [data.email, data.phone, data.city].filter(Boolean);
     return parts.join(" · ");
   }
-  if (resource === "hotels") {
-    return data.type ? `${formatLabel(data.type)} · ${data.city || ""}` : data.city;
-  }
-  if (resource === "rooms") {
-    return data.desc || "";
-  }
+  if (resource === "hotels") return data.type ? `${formatLabel(data.type)} · ${data.city || ""}` : data.city;
+  if (resource === "rooms") return data.desc || "";
   return "";
 };
 
@@ -184,30 +163,11 @@ const getImageSrc = (resource, data) => {
   return PLACEHOLDER_IMAGE;
 };
 
-const formatCurrency = (value) => {
-  if (value === undefined || value === null || value === "") return "—";
-  const numeric = Number(value);
-  if (Number.isNaN(numeric)) {
-    return value;
-  }
-  try {
-    return new Intl.NumberFormat("en-IN", {
-      style: "currency",
-      currency: "INR",
-      maximumFractionDigits: 0,
-    }).format(numeric);
-  } catch (error) {
-    return numeric.toLocaleString();
-  }
-};
-
 const Single = () => {
   const location = useLocation();
   const params = useParams();
   const id = useMemo(() => Object.values(params)[0], [params]);
-  const resource = useMemo(() => location.pathname.split("/")[1] || "", [
-    location.pathname,
-  ]);
+  const resource = useMemo(() => location.pathname.split("/")[1] || "", [location.pathname]);
   const navigate = useNavigate();
 
   const [data, setData] = useState(null);
@@ -216,14 +176,15 @@ const Single = () => {
   const [editingUser, setEditingUser] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [saveSuccess, setSaveSuccess] = useState("");
   const [formState, setFormState] = useState(null);
-  const [hotels, setHotels] = useState([]);
   const [passwordState, setPasswordState] = useState({ newPassword: "", confirmPassword: "" });
   const [resettingPassword, setResettingPassword] = useState(false);
   const [resetError, setResetError] = useState("");
   const [resetSuccess, setResetSuccess] = useState("");
   const { user: authUser, dispatch } = useContext(AuthContext);
   const isMounted = useRef(true);
+
   const [editingRoom, setEditingRoom] = useState(false);
   const [roomForm, setRoomForm] = useState(null);
   const [roomSaving, setRoomSaving] = useState(false);
@@ -231,18 +192,6 @@ const Single = () => {
   const [roomSaveSuccess, setRoomSaveSuccess] = useState("");
   const [roomUploading, setRoomUploading] = useState(false);
   const [roomImageFeedback, setRoomImageFeedback] = useState("");
-
-  const resetPasswordForm = () => {
-    setPasswordState({ newPassword: "", confirmPassword: "" });
-    setResetError("");
-    setResetSuccess("");
-  };
-
-  const closeUserModal = () => {
-    setEditingUser(false);
-    resetPasswordForm();
-    setSaveError("");
-  };
 
   useEffect(() => {
     isMounted.current = true;
@@ -263,59 +212,27 @@ const Single = () => {
         setData(result);
       } catch (err) {
         if (!active) return;
-        setError(
-          err?.response?.data?.message || err?.message || "Failed to load details"
-        );
+        setError(err?.response?.data?.message || err?.message || "Failed to load details");
         setData(null);
       } finally {
-        if (active) {
-          setLoading(false);
-        }
+        if (active) setLoading(false);
       }
     };
 
     loadData();
-
     return () => {
       active = false;
     };
   }, [resource, id]);
 
-  useEffect(() => {
-    let active = true;
-    const loadHotels = async () => {
-      if (resource !== "users") return;
-      try {
-        const response = await fetchCollection("hotels");
-        if (!active) return;
-        setHotels(Array.isArray(response) ? response : []);
-      } catch (err) {
-        if (active) {
-          console.error("Failed to load hotels", err);
-        }
-      }
-    };
-
-    loadHotels();
-
-    return () => {
-      active = false;
-    };
-  }, [resource]);
 
   const configuredFields = useMemo(() => fieldConfig[resource] || [], [resource]);
-  const configuredKeys = useMemo(
-    () => new Set(configuredFields.map((field) => field.key)),
-    [configuredFields]
-  );
+  const configuredKeys = useMemo(() => new Set(configuredFields.map((field) => field.key)), [configuredFields]);
 
   const fallbackFields = useMemo(() => {
     if (!data) return [];
     return Object.keys(data)
-      .filter(
-        (key) =>
-          !configuredKeys.has(key) && !excludedFallbackFields.includes(key)
-      )
+      .filter((key) => !configuredKeys.has(key) && !excludedFallbackFields.includes(key))
       .map((key) => ({ key, label: formatLabel(key) }));
   }, [data, configuredKeys]);
 
@@ -332,9 +249,7 @@ const Single = () => {
       value: data ? formatValue(key, data[key]) : "",
     }));
 
-    return [...configuredDetails, ...fallbackDetails].filter(
-      (detail) => detail.value !== ""
-    );
+    return [...configuredDetails, ...fallbackDetails].filter((detail) => detail.value !== "");
   }, [configuredFields, fallbackFields, data]);
 
   const pageTitle = resourceTitles[resource] || "Details";
@@ -344,6 +259,29 @@ const Single = () => {
   const isUserResource = resource === "users";
   const isHotelResource = resource === "hotels";
   const isRoomResource = resource === "rooms";
+  const canUsePortal = typeof window !== "undefined" && typeof document !== "undefined";
+  const modalRoot = canUsePortal ? document.body : null;
+
+  const resetPasswordFields = () => {
+    setPasswordState({ newPassword: "", confirmPassword: "" });
+  };
+
+  const clearPasswordFeedback = () => {
+    setResetError("");
+    setResetSuccess("");
+  };
+
+  const resetPasswordForm = () => {
+    resetPasswordFields();
+    clearPasswordFeedback();
+  };
+
+  const closeUserModal = () => {
+    setEditingUser(false);
+    resetPasswordForm();
+    setSaveSuccess("");
+    setSaveError("");
+  };
 
   const openRoomDrawer = () => {
     if (!data) return;
@@ -352,9 +290,7 @@ const Single = () => {
     setRoomSaveError("");
     setRoomSaveSuccess("");
     setRoomImageFeedback(
-      normalized.photos.length
-        ? `${normalized.photos.length}/${MAX_ROOM_IMAGES} images in gallery.`
-        : ""
+      normalized.photos.length ? `${normalized.photos.length}/${MAX_ROOM_IMAGES} images in gallery.` : ""
     );
     setEditingRoom(true);
   };
@@ -390,12 +326,8 @@ const Single = () => {
     try {
       for (const file of files) {
         const uploaded = await uploadRoomImage(file);
-        if (uploaded) {
-          uploadedUrls.push(uploaded);
-        }
-        if (roomForm.photos.length + uploadedUrls.length >= MAX_ROOM_IMAGES) {
-          break;
-        }
+        if (uploaded) uploadedUrls.push(uploaded);
+        if (roomForm.photos.length + uploadedUrls.length >= MAX_ROOM_IMAGES) break;
       }
 
       if (uploadedUrls.length) {
@@ -412,9 +344,7 @@ const Single = () => {
       setRoomSaveError(err?.response?.data?.message || err?.message || "Failed to upload image.");
     } finally {
       setRoomUploading(false);
-      if (event.target) {
-        event.target.value = "";
-      }
+      if (event.target) event.target.value = "";
     }
   };
 
@@ -422,9 +352,7 @@ const Single = () => {
     setRoomForm((prev) => {
       if (!prev) return prev;
       const nextPhotos = prev.photos.filter((_, photoIndex) => photoIndex !== index);
-      setRoomImageFeedback(
-        nextPhotos.length ? `${nextPhotos.length}/${MAX_ROOM_IMAGES} images in gallery.` : ""
-      );
+      setRoomImageFeedback(nextPhotos.length ? `${nextPhotos.length}/${MAX_ROOM_IMAGES} images in gallery.` : "");
       return { ...prev, photos: nextPhotos };
     });
     setRoomSaveError("");
@@ -436,10 +364,7 @@ const Single = () => {
       if (!prev) return prev;
       return {
         ...prev,
-        roomNumbers: [
-          ...prev.roomNumbers,
-          { _id: `temp-${Date.now()}`, number: "", unavailableDates: [] },
-        ],
+        roomNumbers: [...prev.roomNumbers, { _id: `temp-${Date.now()}`, number: "", unavailableDates: [] }],
       };
     });
     setRoomSaveError("");
@@ -461,10 +386,7 @@ const Single = () => {
   const handleRemoveRoomNumber = (roomNumberId) => {
     setRoomForm((prev) => {
       if (!prev) return prev;
-      return {
-        ...prev,
-        roomNumbers: prev.roomNumbers.filter((roomNumber) => roomNumber._id !== roomNumberId),
-      };
+      return { ...prev, roomNumbers: prev.roomNumbers.filter((roomNumber) => roomNumber._id !== roomNumberId) };
     });
     setRoomSaveError("");
     setRoomSaveSuccess("");
@@ -472,7 +394,6 @@ const Single = () => {
 
   const handleRoomSave = async () => {
     if (!roomForm?._id) return;
-
     const trimmedTitle = roomForm.title.trim();
     if (!trimmedTitle) {
       setRoomSaveError("Room title is required.");
@@ -482,18 +403,12 @@ const Single = () => {
     const parsedRoomNumbers = roomForm.roomNumbers
       .map((roomNumber) => {
         const parsedNumber = Number(roomNumber.number);
-        if (Number.isNaN(parsedNumber)) {
-          return null;
-        }
+        if (Number.isNaN(parsedNumber)) return null;
         const payload = {
           number: parsedNumber,
-          unavailableDates: Array.isArray(roomNumber.unavailableDates)
-            ? roomNumber.unavailableDates
-            : [],
+          unavailableDates: Array.isArray(roomNumber.unavailableDates) ? roomNumber.unavailableDates : [],
         };
-        if (roomNumber._id && !`${roomNumber._id}`.startsWith("temp-")) {
-          payload._id = roomNumber._id;
-        }
+        if (roomNumber._id && !`${roomNumber._id}`.startsWith("temp-")) payload._id = roomNumber._id;
         return payload;
       })
       .filter(Boolean);
@@ -522,15 +437,11 @@ const Single = () => {
       const normalized = normalizeRoom(updated);
       setRoomForm(normalized);
       setRoomImageFeedback(
-        normalized.photos.length
-          ? `${normalized.photos.length}/${MAX_ROOM_IMAGES} images in gallery.`
-          : ""
+        normalized.photos.length ? `${normalized.photos.length}/${MAX_ROOM_IMAGES} images in gallery.` : ""
       );
       setRoomSaveSuccess("Room details saved.");
     } catch (err) {
-      setRoomSaveError(
-        err?.response?.data?.message || err?.message || "Failed to save room details."
-      );
+      setRoomSaveError(err?.response?.data?.message || err?.message || "Failed to save room details.");
     } finally {
       setRoomSaving(false);
     }
@@ -545,11 +456,8 @@ const Single = () => {
 
   const hotelStats = useMemo(() => {
     if (!isHotelResource || !data) return [];
-    const stats = [
-      {
-        label: "Property type",
-        value: data.type ? formatLabel(data.type) : "",
-      },
+    return [
+      { label: "Property type", value: data.type ? formatLabel(data.type) : "" },
       {
         label: "Base rate",
         value:
@@ -557,25 +465,11 @@ const Single = () => {
             ? formatCurrency(data.cheapestPrice)
             : "",
       },
-      {
-        label: "Distance",
-        value: data.distance ? `${data.distance} from centre` : "",
-      },
-      {
-        label: "Rooms linked",
-        value: Array.isArray(data.rooms) ? `${data.rooms.length} room types` : "",
-      },
-      {
-        label: "Featured listing",
-        value: data.featured ? "Yes" : "No",
-      },
-      {
-        label: "Address",
-        value: data.address || "",
-      },
-    ];
-
-    return stats.filter((item) => item.value);
+      { label: "Distance", value: data.distance ? `${data.distance} from centre` : "" },
+      { label: "Rooms linked", value: Array.isArray(data.rooms) ? `${data.rooms.length} room types` : "" },
+      { label: "Featured listing", value: data.featured ? "Yes" : "No" },
+      { label: "Address", value: data.address || "" },
+    ].filter((item) => item.value);
   }, [data, isHotelResource]);
 
   const hotelGallery = useMemo(() => {
@@ -583,576 +477,757 @@ const Single = () => {
     return data.photos.slice(0, 4);
   }, [data, isHotelResource]);
 
-  return (
-    <div className="single">
-      <Sidebar />
-      <div className="singleContainer">
-        <Navbar />
-        <div className={`top ${isHotelResource ? "top--hotel" : ""}`}>
-          <section className={`profilePanel ${isUserResource ? "profilePanel--user" : ""}`}>
-            <div className="titleRow">
-              <div>
-                <p className="breadcrumb">Dashboard / {pageTitle}</p>
-                <h1 className="title">{pageTitle}</h1>
-              </div>
-              <button
-                className="editButton"
-                type="button"
-                disabled={!id}
-                onClick={() => {
-                  if (isUserResource) {
-                    setFormState((prev) => {
-                      const source = prev || data || {};
-                      return {
-                        username: source.username || "",
-                        email: source.email || "",
-                        phone: source.phone || "",
-                        country: source.country || "",
-                        city: source.city || "",
-                        isAdmin: Boolean(source.isAdmin),
-                        superAdmin: Boolean(source.superAdmin),
-                        managedHotel: source.managedHotel?._id || source.managedHotel || "",
-                      };
-                    });
-                    resetPasswordForm();
-                    setEditingUser(true);
-                    return;
-                  }
+  const renderWithPortal = (element) => {
+    if (!element) return null;
+    return modalRoot ? createPortal(element, modalRoot) : element;
+  };
 
-                  if (isRoomResource && id) {
-                    openRoomDrawer();
-                    return;
-                  }
+  const userModal =
+    editingUser && data && formState ? (
+      <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-900/30 backdrop-blur-sm p-6">
+        <div className="w-full max-w-2xl space-y-6 rounded-2xl border border-border bg-surface p-8 shadow-soft dark:border-dark-border dark:bg-dark-surface">
+          <header className="space-y-1">
+            <h2 className="text-xl font-semibold text-text-primary dark:text-dark-text-primary">Edit user</h2>
+            <p className="text-sm text-text-muted dark:text-dark-text-muted">
+              Update contact information and administrative permissions for this account.
+            </p>
+          </header>
 
-                  if (resource === "hotels" && id) {
-                    navigate(`/hotels/${id}/edit`, { replace: false });
-                  }
-                }}
-              >
-                {isHotelResource ? "Edit hotel" : resource === "rooms" ? "Manage room" : "Manage"}
-              </button>
-            </div>
+          <form
+            className="grid gap-4"
+            onSubmit={async (event) => {
+              event.preventDefault();
+              setSaving(true);
+              setSaveError("");
+              setSaveSuccess("");
+              try {
+                const payload = {
+                  ...formState,
+                  isAdmin: Boolean(formState.isAdmin),
+                  superAdmin: Boolean(formState.superAdmin),
+                };
 
-            <div className={`profilePanel__body ${isHotelResource ? "profilePanel__body--hotel" : ""}`}>
-              <div className="profilePanel__media">
-                <img src={imageSrc} alt={primaryTitle} className="itemImg" />
-              </div>
-              <div className="profilePanel__details">
-                {loading && <div className="stateMessage loading">Loading details…</div>}
-                {error && !loading && <div className="stateMessage error">{error}</div>}
-                {!loading && !error && data && (
-                  <>
-                    <div className="itemHead">
-                      <h1 className="itemTitle">{primaryTitle}</h1>
-                      {isUserResource && (
-                        <div className="tagRow">
-                          {data.superAdmin && <span className="tag tag--super">Super admin</span>}
-                          {!data.superAdmin && data.isAdmin && <span className="tag tag--admin">Admin</span>}
-                          {!data.isAdmin && !data.superAdmin && <span className="tag tag--member">Member</span>}
-                          {data.managedHotel && (
-                            <span className="tag tag--hotel">Manager</span>
-                          )}
-                        </div>
-                      )}
-                      {isHotelResource && (
-                        <div className="tagRow">
-                          {data.type && <span className="tag tag--type">{formatLabel(data.type)}</span>}
-                          {data.featured && <span className="tag tag--featured">Featured</span>}
-                          {data.cheapestPrice !== undefined && data.cheapestPrice !== null && (
-                            <span className="tag tag--price">{formatCurrency(data.cheapestPrice)}</span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                    {subTitle && <p className="itemSubtitle">{subTitle}</p>}
-                    {details.length ? (
-                      <div className="detailGrid">
-                        {details.map(({ key, label, value }) => (
-                          <div className="detailCard" key={key}>
-                            <span className="detailLabel">{label}</span>
-                            <span className="detailValue">{value}</span>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="stateMessage muted">No additional information available.</div>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
-          </section>
-        </div>
-        {isHotelResource && data && (
-          <section className="hotelOverview">
-            <header className="hotelOverview__header">
-              <div>
-                <h2>Property highlights</h2>
-                <p>
-                  Positioned details to help guests make quick decisions. Update these fields from the edit
-                  action if anything changes.
-                </p>
-              </div>
-            </header>
-            {hotelStats.length > 0 && (
-              <div className="hotelOverview__grid">
-                {hotelStats.map(({ label, value }) => (
-                  <article key={label} className="hotelOverview__card">
-                    <span className="hotelOverview__label">{label}</span>
-                    <span className="hotelOverview__value">{value}</span>
-                  </article>
-                ))}
-              </div>
-            )}
-            {data.desc && (
-              <div className="hotelOverview__description">
-                <h3>About this stay</h3>
-                <p>{data.desc}</p>
-              </div>
-            )}
-            {hotelGallery.length > 1 && (
-              <div className="hotelOverview__gallery">
-                {hotelGallery.map((photo, index) => (
-                  <figure className="hotelOverview__photo" key={photo}>
-                    <img src={photo || PLACEHOLDER_IMAGE} alt={`Hotel visual ${index + 1}`} />
-                  </figure>
-                ))}
-              </div>
-            )}
-          </section>
-        )}
-        {resource === "hotels" && (
-          <div className="bottom">
-            <h1 className="title">Last Transactions</h1>
-            <List />
-          </div>
-        )}
-      </div>
-      {editingRoom && isRoomResource && roomForm && (
-        <div className="roomDrawerOverlay">
-          <div className="roomDrawer" role="dialog" aria-modal="true">
-            <header className="roomDrawer__header">
-              <div>
-                <h2>Manage room</h2>
-                <p>Refine this suite’s details, gallery, and suite numbers without leaving the panel.</p>
-              </div>
-              <button
-                type="button"
-                className="roomDrawer__close"
-                onClick={closeRoomDrawer}
-                aria-label="Close room drawer"
-              >
-                ×
-              </button>
-            </header>
-
-            <div className="roomDrawer__body">
-              <section className="roomDrawer__section">
-                <h3>Room details</h3>
-                <div className="roomDrawer__grid">
-                  <label className="roomDrawer__field">
-                    <span>Title</span>
-                    <input
-                      type="text"
-                      value={roomForm.title}
-                      onChange={(event) => handleRoomFieldChange("title", event.target.value)}
-                      placeholder="Signature Skyline Suite"
-                    />
-                  </label>
-                  <label className="roomDrawer__field">
-                    <span>Nightly price (₹)</span>
-                    <input
-                      type="number"
-                      min="0"
-                      value={roomForm.price}
-                      onChange={(event) => handleRoomFieldChange("price", event.target.value)}
-                      placeholder="350"
-                    />
-                  </label>
-                  <label className="roomDrawer__field">
-                    <span>Max guests</span>
-                    <input
-                      type="number"
-                      min="1"
-                      value={roomForm.maxPeople}
-                      onChange={(event) => handleRoomFieldChange("maxPeople", event.target.value)}
-                      placeholder="4"
-                    />
-                  </label>
-                </div>
-                <label className="roomDrawer__field roomDrawer__field--full">
-                  <span>Description</span>
-                  <textarea
-                    rows="3"
-                    value={roomForm.desc}
-                    onChange={(event) => handleRoomFieldChange("desc", event.target.value)}
-                    placeholder="Describe standout amenities, layout, and service highlights"
+                const updated = await updateUser(id, payload);
+                if (!isMounted.current) return;
+                setData(updated);
+                setFormState((prev) => ({
+                  ...prev,
+                  username: updated?.username || "",
+                  email: updated?.email || "",
+                  phone: updated?.phone || "",
+                  country: updated?.country || "",
+                  city: updated?.city || "",
+                  isAdmin: Boolean(updated?.isAdmin),
+                  superAdmin: Boolean(updated?.superAdmin),
+                  managedHotel: updated?.superAdmin ? "" : updated?.managedHotel?._id || updated?.managedHotel || "",
+                }));
+                if (authUser?._id === updated._id) {
+                  dispatch({ type: "UPDATE_USER", payload: updated });
+                }
+                setSaveSuccess("Profile details saved successfully.");
+              } catch (err) {
+                if (!isMounted.current) return;
+                setSaveError(err?.response?.data?.message || err?.message || "Failed to update user");
+              } finally {
+                if (isMounted.current) setSaving(false);
+              }
+            }}
+          >
+            <div className="grid gap-4 sm:grid-cols-2">
+              {[
+                { id: "username", label: "Username" },
+                { id: "email", label: "Email", type: "email" },
+                { id: "phone", label: "Phone" },
+                { id: "country", label: "Country" },
+                { id: "city", label: "City" },
+              ].map(({ id: fieldId, label, type = "text" }) => (
+                <label key={fieldId} className="grid gap-1 text-sm">
+                  <span className="font-medium text-text-secondary dark:text-dark-text-secondary">{label}</span>
+                  <input
+                    id={fieldId}
+                    type={type}
+                    value={formState[fieldId] || ""}
+                    onChange={(event) =>
+                      setFormState((prev) => ({ ...prev, [fieldId]: event.target.value }))
+                    }
+                    className="rounded-lg border border-border bg-white px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-dark-border dark:bg-dark-background dark:text-dark-text-primary"
                   />
                 </label>
-              </section>
-
-              <section className="roomDrawer__section">
-                <header className="roomDrawer__sectionHeader">
-                  <h3>Gallery</h3>
-                  <span className="roomDrawer__hint">Upload up to {MAX_ROOM_IMAGES} images.</span>
-                </header>
-                {roomImageFeedback && <p className="roomDrawer__info">{roomImageFeedback}</p>}
-                <div className="roomDrawer__gallery">
-                  {roomForm.photos.map((photo, index) => (
-                    <figure className="roomDrawer__thumbnail" key={`${photo}-${index}`}>
-                      <img src={photo} alt={`Room visual ${index + 1}`} />
-                      <button
-                        type="button"
-                        className="roomDrawer__thumbnailRemove"
-                        onClick={() => handleRemoveRoomPhoto(index)}
-                        disabled={roomSaving || roomUploading}
-                      >
-                        Remove
-                      </button>
-                    </figure>
-                  ))}
-                  {roomForm.photos.length < MAX_ROOM_IMAGES && (
-                    <label className={`roomDrawer__upload ${roomUploading ? "roomDrawer__upload--loading" : ""}`}>
-                      <span>{roomUploading ? "Uploading…" : "Add image"}</span>
-                      <input
-                        type="file"
-                        accept="image/png,image/jpeg,image/webp,image/gif"
-                        multiple
-                        onChange={handleRoomPhotoUpload}
-                        disabled={roomUploading || roomSaving}
-                      />
-                    </label>
-                  )}
-                </div>
-              </section>
-
-              <section className="roomDrawer__section">
-                <header className="roomDrawer__sectionHeader">
-                  <h3>Suite numbers</h3>
-                  <button
-                    type="button"
-                    className="roomDrawer__addSuite"
-                    onClick={handleAddRoomNumber}
-                    disabled={roomSaving || roomUploading}
-                  >
-                    Add suite
-                  </button>
-                </header>
-                <div className="roomDrawer__numbers">
-                  {roomForm.roomNumbers.length === 0 && (
-                    <p className="roomDrawer__hint">No suites linked yet. Add at least one number.</p>
-                  )}
-                  {roomForm.roomNumbers.map((roomNumber) => (
-                    <div className="roomDrawer__numberCard" key={roomNumber._id}>
-                      <label>
-                        <span>Suite number</span>
-                        <input
-                          type="number"
-                          min="0"
-                          value={roomNumber.number}
-                          onChange={(event) => handleRoomNumberChange(roomNumber._id, event.target.value)}
-                        />
-                      </label>
-                      <div className="roomDrawer__numberMeta">
-                        <span>
-                          {Array.isArray(roomNumber.unavailableDates)
-                            ? `${roomNumber.unavailableDates.length} dates on hold`
-                            : "0 dates on hold"}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveRoomNumber(roomNumber._id)}
-                          className="roomDrawer__numberRemove"
-                          disabled={roomSaving || roomUploading}
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-
-              {(roomSaveError || roomSaveSuccess) && (
-                <div
-                  className={`roomDrawer__message ${roomSaveError ? "roomDrawer__message--error" : "roomDrawer__message--success"}`}
-                  role="status"
-                >
-                  {roomSaveError || roomSaveSuccess}
-                </div>
-              )}
+              ))}
             </div>
 
-            <footer className="roomDrawer__footer">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="flex items-center gap-3 rounded-lg border border-border/60 px-4 py-3 text-sm font-medium text-text-secondary dark:border-dark-border/60 dark:text-dark-text-secondary">
+                <input
+                  type="checkbox"
+                  checked={formState.isAdmin}
+                  onChange={(event) =>
+                    setFormState((prev) => ({ ...prev, isAdmin: event.target.checked }))
+                  }
+                  className="h-4 w-4"
+                />
+                <span>Grant admin access</span>
+              </label>
+              <label className="flex items-center gap-3 rounded-lg border border-border/60 px-4 py-3 text-sm font-medium text-text-secondary dark:border-dark-border/60 dark:text-dark-text-secondary">
+                <input
+                  type="checkbox"
+                  checked={formState.superAdmin}
+                  onChange={(event) =>
+                    setFormState((prev) => ({ ...prev, superAdmin: event.target.checked }))
+                  }
+                  className="h-4 w-4"
+                />
+                <span>Grant super-admin access</span>
+              </label>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="grid gap-1 text-sm">
+                <span className="font-medium text-text-secondary dark:text-dark-text-secondary">New password</span>
+                <input
+                  type="password"
+                  value={passwordState.newPassword}
+                  onChange={(event) =>
+                    setPasswordState((prev) => ({ ...prev, newPassword: event.target.value }))
+                  }
+                  className="rounded-lg border border-border bg-white px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-dark-border dark:bg-dark-background dark:text-dark-text-primary"
+                />
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span className="font-medium text-text-secondary dark:text-dark-text-secondary">Confirm password</span>
+                <input
+                  type="password"
+                  value={passwordState.confirmPassword}
+                  onChange={(event) =>
+                    setPasswordState((prev) => ({ ...prev, confirmPassword: event.target.value }))
+                  }
+                  className="rounded-lg border border-border bg-white px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-dark-border dark:bg-dark-background dark:text-dark-text-primary"
+                />
+              </label>
+            </div>
+
+            {saveError && (
+              <div className="rounded-lg border border-danger/20 bg-danger/10 px-4 py-3 text-sm text-danger">
+                {saveError}
+              </div>
+            )}
+
+            {saveSuccess && (
+              <div className="rounded-lg border border-success/20 bg-success/10 px-4 py-3 text-sm text-success">
+                {saveSuccess}
+              </div>
+            )}
+
+            {resetError && (
+              <div className="rounded-lg border border-danger/20 bg-danger/10 px-4 py-3 text-sm text-danger">
+                {resetError}
+              </div>
+            )}
+
+            {resetSuccess && (
+              <div className="rounded-lg border border-success/20 bg-success/10 px-4 py-3 text-sm text-success">
+                {resetSuccess}
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="submit"
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-dark disabled:cursor-not-allowed disabled:bg-primary/60"
+                disabled={saving}
+              >
+                {saving ? "Saving…" : "Save changes"}
+              </button>
               <button
                 type="button"
-                className="roomDrawer__action roomDrawer__action--muted"
-                onClick={closeRoomDrawer}
-                disabled={roomSaving}
+                className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-text-secondary transition hover:border-primary hover:text-primary dark:border-dark-border dark:text-dark-text-secondary"
+                onClick={closeUserModal}
               >
                 Cancel
               </button>
               <button
                 type="button"
-                className="roomDrawer__action roomDrawer__action--primary"
-                onClick={handleRoomSave}
-                disabled={roomSaving || roomUploading}
-              >
-                {roomSaving ? "Saving…" : "Save changes"}
-              </button>
-            </footer>
-          </div>
-        </div>
-      )}
-      {editingUser && data && formState && (
-        <div className="modalOverlay">
-          <div className="modal">
-            <h2>Edit user</h2>
-            <p className="modalSubtitle">
-              Update contact information and administrative permissions for this account.
-            </p>
-            <form
-              className="userForm"
-              onSubmit={async (event) => {
-                event.preventDefault();
-                setSaving(true);
-                setSaveError("");
-                try {
-                  const payload = {
-                    ...formState,
-                    isAdmin: formState.isAdmin,
-                    superAdmin: formState.superAdmin,
-                  };
-
-                  const updated = await updateUser(id, payload);
-                  if (!isMounted.current) return;
-                  setData(updated);
-                  if (authUser?._id === updated._id) {
-                    dispatch({ type: "UPDATE_USER", payload: updated });
-                  }
-                  closeUserModal();
-                } catch (err) {
-                  if (!isMounted.current) return;
-                  setSaveError(err?.response?.data?.message || err?.message || "Failed to update user.");
-                } finally {
-                  if (isMounted.current) {
-                    setSaving(false);
-                  }
+                className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-text-secondary transition hover:border-primary hover:text-primary dark:border-dark-border dark:text-dark-text-secondary"
+                disabled={
+                  resettingPassword ||
+                  !passwordState.newPassword ||
+                  passwordState.newPassword !== passwordState.confirmPassword
                 }
-              }}
-            >
-              <div className="formGrid">
-                <label className="formControl">
-                  <span>Username</span>
-                  <input
-                    type="text"
-                    value={formState.username}
-                    onChange={(event) =>
-                      setFormState((prev) => ({ ...prev, username: event.target.value }))
-                    }
-                    required
-                    disabled={saving}
-                  />
-                </label>
-                <label className="formControl">
-                  <span>Email</span>
-                  <input
-                    type="email"
-                    value={formState.email}
-                    onChange={(event) =>
-                      setFormState((prev) => ({ ...prev, email: event.target.value }))
-                    }
-                    required
-                    disabled={saving}
-                  />
-                </label>
-                <label className="formControl">
-                  <span>Phone</span>
-                  <input
-                    type="tel"
-                    value={formState.phone}
-                    onChange={(event) =>
-                      setFormState((prev) => ({ ...prev, phone: event.target.value }))
-                    }
-                    required
-                    disabled={saving}
-                  />
-                </label>
-                <label className="formControl">
-                  <span>Country</span>
-                  <input
-                    type="text"
-                    value={formState.country}
-                    onChange={(event) =>
-                      setFormState((prev) => ({ ...prev, country: event.target.value }))
-                    }
-                    required
-                    disabled={saving}
-                  />
-                </label>
-                <label className="formControl">
-                  <span>City</span>
-                  <input
-                    type="text"
-                    value={formState.city}
-                    onChange={(event) =>
-                      setFormState((prev) => ({ ...prev, city: event.target.value }))
-                    }
-                    required
-                    disabled={saving}
-                  />
-                </label>
-                <label className="formControl">
-                  <span>Managed hotel</span>
-                  <select
-                    value={formState.managedHotel || ""}
-                    onChange={(event) =>
-                      setFormState((prev) => ({ ...prev, managedHotel: event.target.value || null }))
-                    }
-                    disabled={saving}
-                  >
-                    <option value="">Unassigned</option>
-                    {hotels.map((hotel) => (
-                      <option key={hotel._id} value={hotel._id}>
-                        {hotel.name} · {hotel.city}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
+                onClick={async () => {
+                  if (!passwordState.newPassword || passwordState.newPassword !== passwordState.confirmPassword) return;
+                  setResettingPassword(true);
+                  clearPasswordFeedback();
+                  try {
+                    const trimmedPassword = passwordState.newPassword.trim();
+                    await resetUserPassword(id, trimmedPassword);
+                    resetPasswordFields();
+                    setResetSuccess("Password reset successfully.");
+                  } catch (err) {
+                    setResetError(
+                      err?.response?.data?.message || err?.message || "Failed to reset password"
+                    );
+                  } finally {
+                    setResettingPassword(false);
+                  }
+                }}
+              >
+                {resettingPassword ? "Resetting…" : "Reset password"}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    )
+    : null;
 
-              <div className="roleToggles">
-                <label className="switchLabel">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(formState?.isAdmin)}
-                    onChange={(event) =>
-                      setFormState((prev) => ({ ...prev, isAdmin: event.target.checked }))
-                    }
-                    disabled={saving}
-                  />
-                  <span>{formState?.isAdmin ? "Administrator" : "Member"}</span>
-                </label>
-                <label className="switchLabel">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(formState?.superAdmin)}
-                    onChange={(event) =>
-                      setFormState((prev) => ({ ...prev, superAdmin: event.target.checked }))
-                    }
-                    disabled={saving}
-                  />
-                  <span>{formState?.superAdmin ? "Super admin" : "Standard admin"}</span>
-                </label>
-              </div>
-              {authUser?.superAdmin && (
-                <div className="passwordSection">
-                  <h3>Reset password</h3>
-                  <p>Set a new password for this user. Minimum 6 characters.</p>
-                  <div className="passwordGrid">
-                    <label className="formControl">
-                      <span>New password</span>
-                      <input
-                        type="password"
-                        value={passwordState.newPassword}
-                        onChange={(event) =>
-                          setPasswordState((prev) => ({
-                            ...prev,
-                            newPassword: event.target.value,
-                          }))
-                        }
-                        minLength={6}
-                        disabled={saving || resettingPassword}
-                      />
-                    </label>
-                    <label className="formControl">
-                      <span>Confirm password</span>
-                      <input
-                        type="password"
-                        value={passwordState.confirmPassword}
-                        onChange={(event) =>
-                          setPasswordState((prev) => ({
-                            ...prev,
-                            confirmPassword: event.target.value,
-                          }))
-                        }
-                        minLength={6}
-                        disabled={saving || resettingPassword}
-                      />
-                    </label>
-                  </div>
-                  {resetError && <div className="modalError">{resetError}</div>}
-                  {resetSuccess && <div className="modalSuccess">{resetSuccess}</div>}
-                  <div className="passwordActions">
-                    <button
-                      type="button"
-                      className="btn-primary"
-                      disabled={
-                        saving ||
-                        resettingPassword ||
-                        !passwordState.newPassword ||
-                        !passwordState.confirmPassword
-                      }
-                      onClick={async () => {
-                        if (!authUser?.superAdmin || resource !== "users" || !id) {
-                          return;
-                        }
-                        setResettingPassword(true);
-                        setResetError("");
-                        setResetSuccess("");
-                        const trimmed = passwordState.newPassword.trim();
-                        if (trimmed.length < 6) {
-                          setResetError("Password must be at least 6 characters long.");
-                          setResettingPassword(false);
-                          return;
-                        }
-                        if (trimmed !== passwordState.confirmPassword.trim()) {
-                          setResetError("Passwords do not match.");
-                          setResettingPassword(false);
-                          return;
-                        }
-                        try {
-                          await resetUserPassword(id, trimmed);
-                          if (!isMounted.current) return;
-                          setResetSuccess("Password reset successfully.");
-                          setPasswordState({ newPassword: "", confirmPassword: "" });
-                        } catch (err) {
-                          if (!isMounted.current) return;
-                          setResetError(
-                            err?.response?.data?.message || err?.message || "Failed to reset password."
-                          );
-                        } finally {
-                          if (isMounted.current) {
-                            setResettingPassword(false);
-                          }
-                        }
-                      }}
-                    >
-                      {resettingPassword ? "Resetting…" : "Reset password"}
-                    </button>
-                  </div>
+  const roomModal =
+    editingRoom && isRoomResource && roomForm ? (
+      <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-900/30 backdrop-blur-sm p-6 sm:p-8">
+        <div className="flex h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-border/80 bg-surface shadow-[0_48px_140px_-70px_rgba(15,23,42,0.75)] dark:border-dark-border/80 dark:bg-dark-surface">
+          <header className="relative overflow-hidden border-b border-border/60 bg-gradient-to-br from-primary/15 via-primary/5 to-transparent px-6 py-5 sm:px-8 sm:py-6 dark:border-dark-border/60">
+            <div className="absolute inset-y-0 right-0 w-2/3 bg-gradient-to-l from-primary/30 via-transparent to-transparent opacity-60 blur-2xl" />
+            <div className="relative flex flex-wrap items-start justify-between gap-6">
+              <div className="space-y-2">
+                <span className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-0.5 text-[11px] font-semibold uppercase tracking-[0.24em] text-primary dark:bg-primary/20">
+                  Room management
+                </span>
+                <div className="space-y-2">
+                  <h2 className="text-xl font-semibold text-text-primary dark:text-dark-text-primary">
+                    Manage room
+                  </h2>
+                  <p className="max-w-lg text-sm text-text-muted dark:text-dark-text-muted">
+                    Refresh inventory details, imagery, and suite availability without leaving this property view.
+                  </p>
                 </div>
-              )}
+              </div>
+              <div className="flex flex-wrap items-center gap-3 text-sm font-semibold">
+                <div className="rounded-2xl border border-border/50 bg-white/70 px-4 py-1.5 text-text-primary backdrop-blur dark:border-dark-border/50 dark:bg-dark-background/70 dark:text-dark-text-primary">
+                  <span className="block text-[11px] uppercase tracking-[0.22em] text-text-muted dark:text-dark-text-muted">
+                    Nightly rate
+                  </span>
+                  <span>{formatCurrency(roomForm.price)}</span>
+                </div>
+                <div className="rounded-2xl border border-border/50 bg-white/70 px-4 py-1.5 text-text-primary backdrop-blur dark:border-dark-border/50 dark:bg-dark-background/70 dark:text-dark-text-primary">
+                  <span className="block text-[11px] uppercase tracking-[0.22em] text-text-muted dark:text-dark-text-muted">
+                    Capacity
+                  </span>
+                  <span>{roomForm.maxPeople || "—"} guests</span>
+                </div>
+                <div className="rounded-2xl border border-border/50 bg-white/70 px-4 py-1.5 text-text-primary backdrop-blur dark:border-dark-border/50 dark:bg-dark-background/70 dark:text-dark-text-primary">
+                  <span className="block text-[11px] uppercase tracking-[0.22em] text-text-muted dark:text-dark-text-muted">
+                    Suites linked
+                  </span>
+                  <span>{roomForm.roomNumbers.length}</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="ml-auto inline-flex h-8 w-8 items-center justify-center rounded-full border border-border/60 text-base text-text-secondary transition hover:border-danger hover:text-danger dark:border-dark-border/60 dark:text-dark-text-secondary"
+                onClick={closeRoomDrawer}
+                aria-label="Close room drawer"
+              >
+                ×
+              </button>
+            </div>
+          </header>
+          <div className="flex-1 overflow-y-auto bg-background/80 dark:bg-dark-background/80">
+            <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6">
+              <div className="grid gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+                <div className="space-y-6">
+                  <section className="rounded-2xl border border-border/60 bg-white/80 shadow-soft backdrop-blur dark:border-dark-border/60 dark:bg-dark-background/70">
+                    <header className="flex flex-wrap items-start justify-between gap-4 border-b border-border/60 px-5 py-4 dark:border-dark-border/60">
+                      <div>
+                        <h3 className="text-lg font-semibold text-text-primary dark:text-dark-text-primary">Room profile</h3>
+                        <p className="text-sm text-text-muted dark:text-dark-text-muted">
+                          Essential information guests will see first.
+                        </p>
+                      </div>
+                    </header>
+                    <div className="grid gap-4 px-5 py-5 sm:grid-cols-2">
+                      <label className="grid gap-1 text-sm">
+                        <span className="font-medium text-text-secondary dark:text-dark-text-secondary">Title</span>
+                        <input
+                          type="text"
+                          value={roomForm.title}
+                          onChange={(event) => handleRoomFieldChange("title", event.target.value)}
+                          placeholder="Signature Skyline Suite"
+                          className="rounded-lg border border-border bg-white px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-dark-border dark:bg-dark-background dark:text-dark-text-primary"
+                        />
+                      </label>
+                      <label className="grid gap-1 text-sm">
+                        <span className="font-medium text-text-secondary dark:text-dark-text-secondary">Nightly price (₹)</span>
+                        <input
+                          type="number"
+                          min="0"
+                          value={roomForm.price}
+                          onChange={(event) => handleRoomFieldChange("price", event.target.value)}
+                          placeholder="350"
+                          className="rounded-lg border border-border bg-white px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-dark-border dark:bg-dark-background dark:text-dark-text-primary"
+                        />
+                      </label>
+                      <label className="grid gap-1 text-sm">
+                        <span className="font-medium text-text-secondary dark:text-dark-text-secondary">Max guests</span>
+                        <input
+                          type="number"
+                          min="1"
+                          value={roomForm.maxPeople}
+                          onChange={(event) => handleRoomFieldChange("maxPeople", event.target.value)}
+                          placeholder="4"
+                          className="rounded-lg border border-border bg-white px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-dark-border dark:bg-dark-background dark:text-dark-text-primary"
+                        />
+                      </label>
+                      <div className="grid gap-1 text-sm sm:col-span-2">
+                        <span className="font-medium text-text-secondary dark:text-dark-text-secondary">Description</span>
+                        <textarea
+                          rows="4"
+                          value={roomForm.desc}
+                          onChange={(event) => handleRoomFieldChange("desc", event.target.value)}
+                          placeholder="Describe standout amenities, layout, and service highlights."
+                          className="rounded-lg border border-border bg-white px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-dark-border dark:bg-dark-background dark:text-dark-text-primary"
+                        />
+                      </div>
+                    </div>
+                  </section>
 
-              {saveError && <div className="modalError">{saveError}</div>}
-              <div className="modalActions">
+                  <section className="rounded-2xl border border-border/60 bg-white/80 shadow-soft backdrop-blur dark:border-dark-border/60 dark:bg-dark-background/70">
+                    <header className="flex flex-wrap items-start justify-between gap-3 border-b border-border/60 px-5 py-4 text-sm dark:border-dark-border/60">
+                      <div>
+                        <h3 className="text-lg font-semibold text-text-primary dark:text-dark-text-primary">Gallery</h3>
+                        <p className="text-sm text-text-muted dark:text-dark-text-muted">
+                          Showcase high-impact imagery. The first image appears as the cover photo.
+                        </p>
+                      </div>
+                      <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary dark:bg-primary/20">
+                        {roomForm.photos.length}/{MAX_ROOM_IMAGES} images
+                      </span>
+                    </header>
+                    <div className="space-y-4 px-5 py-5">
+                      {roomImageFeedback && (
+                        <div className="rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-sm text-primary dark:border-primary/50 dark:bg-primary/10">
+                          {roomImageFeedback}
+                        </div>
+                      )}
+                      <label
+                        className={`flex min-h-[120px] flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border/60 bg-white/60 px-4 py-6 text-center text-sm text-text-muted transition hover:border-primary hover:text-primary dark:border-dark-border/60 dark:bg-dark-background/60 dark:text-dark-text-muted ${
+                          roomUploading ? "pointer-events-none opacity-60" : "cursor-pointer"
+                        }`}
+                      >
+                        <span className="font-medium">
+                          {roomUploading ? "Uploading…" : "Drag & drop or click to upload"}
+                        </span>
+                        <span className="text-xs text-text-muted dark:text-dark-text-muted">
+                          PNG, JPG, WEBP up to 4MB each
+                        </span>
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp,image/gif"
+                          multiple
+                          onChange={handleRoomPhotoUpload}
+                          disabled={roomUploading || roomSaving}
+                          className="hidden"
+                        />
+                      </label>
+                      {roomForm.photos.length > 0 && (
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          {roomForm.photos.map((photo, index) => (
+                            <figure
+                              key={`${photo}-${index}`}
+                              className="group relative overflow-hidden rounded-xl border border-border/60 bg-background/80 dark:border-dark-border/60 dark:bg-dark-background/60"
+                            >
+                              <img
+                                src={photo}
+                                alt={`Room visual ${index + 1}`}
+                                className="h-40 w-full object-cover transition duration-200 group-hover:scale-105"
+                              />
+                              <button
+                                type="button"
+                                className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-900/75 text-xs font-semibold text-white opacity-90 transition hover:bg-danger hover:text-white"
+                                onClick={() => handleRemoveRoomPhoto(index)}
+                                disabled={roomSaving || roomUploading}
+                                aria-label={`Remove room image ${index + 1}`}
+                              >
+                                ✕
+                              </button>
+                            </figure>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </section>
+
+                  <section className="rounded-2xl border border-border/60 bg-white/80 shadow-soft backdrop-blur dark:border-dark-border/60 dark:bg-dark-background/70">
+                    <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 px-5 py-4 dark:border-dark-border/60">
+                      <div>
+                        <h3 className="text-lg font-semibold text-text-primary dark:text-dark-text-primary">Suite numbers</h3>
+                        <p className="text-sm text-text-muted dark:text-dark-text-muted">
+                          Add every room number available for this category to track occupancy accurately.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-text-secondary transition hover:border-primary hover:text-primary dark:border-dark-border dark:text-dark-text-secondary"
+                        onClick={handleAddRoomNumber}
+                        disabled={roomSaving || roomUploading}
+                      >
+                        + Add suite
+                      </button>
+                    </header>
+                    <div className="space-y-3 px-5 py-5">
+                      {roomForm.roomNumbers.length === 0 && (
+                        <div className="rounded-xl border border-border/50 bg-background/70 px-4 py-3 text-sm text-text-muted dark:border-dark-border/50 dark:bg-dark-background/70 dark:text-dark-text-muted">
+                          No suites linked yet. Add at least one number to keep this room bookable.
+                        </div>
+                      )}
+                      <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+                        {roomForm.roomNumbers.map((roomNumber) => (
+                          <div
+                            key={roomNumber._id}
+                            className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border/60 bg-white px-4 py-3 text-sm shadow-sm dark:border-dark-border/60 dark:bg-dark-background/80"
+                          >
+                            <div className="flex flex-1 flex-col gap-1">
+                              <span className="text-xs font-semibold uppercase tracking-[0.2em] text-text-muted dark:text-dark-text-muted">
+                                Suite number
+                              </span>
+                              <input
+                                type="number"
+                                min="0"
+                                value={roomNumber.number}
+                                onChange={(event) => handleRoomNumberChange(roomNumber._id, event.target.value)}
+                                className="w-28 rounded-lg border border-border bg-white px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-dark-border dark:bg-dark-background dark:text-dark-text-primary"
+                              />
+                            </div>
+                            <div className="flex flex-col items-end gap-2 text-xs text-text-muted dark:text-dark-text-muted">
+                              <span className="rounded-full bg-primary/5 px-3 py-1 font-semibold text-primary dark:bg-primary/20 dark:text-primary/90">
+                                {Array.isArray(roomNumber.unavailableDates)
+                                  ? `${roomNumber.unavailableDates.length} dates on hold`
+                                  : "0 dates on hold"}
+                              </span>
+                              <button
+                                type="button"
+                                className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 font-semibold text-text-secondary transition hover:border-danger hover:text-danger dark:border-dark-border dark:text-dark-text-secondary"
+                                onClick={() => handleRemoveRoomNumber(roomNumber._id)}
+                                disabled={roomSaving || roomUploading}
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </section>
+                </div>
+
+                <aside className="space-y-6">
+                  <div className="rounded-2xl border border-border/60 bg-white/80 px-5 py-5 shadow-soft backdrop-blur dark:border-dark-border/60 dark:bg-dark-background/70">
+                    <h3 className="text-sm font-semibold uppercase tracking-[0.22em] text-text-muted dark:text-dark-text-muted">
+                      Inventory snapshot
+                    </h3>
+                    <dl className="mt-4 space-y-3 text-sm">
+                      <div className="flex items-center justify-between gap-4">
+                        <dt className="text-text-muted dark:text-dark-text-muted">Status</dt>
+                        <dd className="font-semibold text-text-primary dark:text-dark-text-primary">
+                          {roomForm.roomNumbers.length > 0 ? "Ready to publish" : "Needs suites"}
+                        </dd>
+                      </div>
+                      <div className="flex items-center justify-between gap-4">
+                        <dt className="text-text-muted dark:text-dark-text-muted">Lead title</dt>
+                        <dd className="truncate font-semibold text-text-primary dark:text-dark-text-primary">
+                          {roomForm.title || "Untitled room"}
+                        </dd>
+                      </div>
+                      <div className="flex items-center justify-between gap-4">
+                        <dt className="text-text-muted dark:text-dark-text-muted">Gallery coverage</dt>
+                        <dd className="font-semibold text-text-primary dark:text-dark-text-primary">
+                          {roomForm.photos.length}/{MAX_ROOM_IMAGES}
+                        </dd>
+                      </div>
+                      <div className="flex items-center justify-between gap-4">
+                        <dt className="text-text-muted dark:text-dark-text-muted">Max guests</dt>
+                        <dd className="font-semibold text-text-primary dark:text-dark-text-primary">
+                          {roomForm.maxPeople || "—"}
+                        </dd>
+                      </div>
+                    </dl>
+                  </div>
+
+                  <div className="rounded-2xl border border-border/60 bg-white/80 px-5 py-5 shadow-soft backdrop-blur dark:border-dark-border/60 dark:bg-dark-background/70">
+                    <h3 className="text-sm font-semibold uppercase tracking-[0.22em] text-text-muted dark:text-dark-text-muted">
+                      Publishing checklist
+                    </h3>
+                    <ul className="mt-4 space-y-3 text-sm">
+                      <li className="flex items-start gap-3">
+                        <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary dark:bg-primary/20">
+                          ✓
+                        </span>
+                        <div>
+                          <p className="font-semibold text-text-primary dark:text-dark-text-primary">Content completeness</p>
+                          <p className="text-xs text-text-muted dark:text-dark-text-muted">
+                            {roomForm.desc ? "Description included" : "Add a compelling description"}
+                          </p>
+                        </div>
+                      </li>
+                      <li className="flex items-start gap-3">
+                        <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary dark:bg-primary/20">
+                          ✓
+                        </span>
+                        <div>
+                          <p className="font-semibold text-text-primary dark:text-dark-text-primary">Gallery quality</p>
+                          <p className="text-xs text-text-muted dark:text-dark-text-muted">
+                            {roomForm.photos.length > 0 ? "Images attached" : "Upload at least one image"}
+                          </p>
+                        </div>
+                      </li>
+                      <li className="flex items-start gap-3">
+                        <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary dark:bg-primary/20">
+                          ✓
+                        </span>
+                        <div>
+                          <p className="font-semibold text-text-primary dark:text-dark-text-primary">Availability mapping</p>
+                          <p className="text-xs text-text-muted dark:text-dark-text-muted">
+                            {roomForm.roomNumbers.length > 0 ? "Suites mapped" : "Add suite numbers to publish"}
+                          </p>
+                        </div>
+                      </li>
+                    </ul>
+                  </div>
+
+                  <div className="rounded-2xl border border-border/60 bg-white/80 px-5 py-5 text-sm shadow-soft backdrop-blur dark:border-dark-border/60 dark:bg-dark-background/70 dark:text-dark-text-muted">
+                    <h3 className="text-sm font-semibold uppercase tracking-[0.22em] text-text-muted dark:text-dark-text-muted">
+                      Notes
+                    </h3>
+                    <p className="mt-3 text-text-muted dark:text-dark-text-muted">
+                      Update pricing after major seasonal changes and keep suites synced with PMS to avoid overbooking.
+                      Track maintenance windows by adding unavailable dates to each suite number.
+                    </p>
+                  </div>
+                </aside>
+              </div>
+            </div>
+          </div>
+          <footer className="border-t border-border/60 bg-surface/95 px-4 py-4 sm:px-6 dark:border-dark-border/60 dark:bg-dark-surface/95">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="text-sm">
+                {roomSaveError && <span className="font-semibold text-danger">{roomSaveError}</span>}
+                {roomSaveSuccess && <span className="font-semibold text-success">{roomSaveSuccess}</span>}
+                {!roomSaveError && !roomSaveSuccess && (
+                  <span className="text-text-muted dark:text-dark-text-muted">
+                    Save changes to sync with guests and internal systems.
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
                 <button
                   type="button"
-                  className="btn-secondary"
-                  onClick={closeUserModal}
-                  disabled={saving || resettingPassword}
+                  className="inline-flex items-center gap-2 rounded-full border border-border px-5 py-2 text-sm font-semibold text-text-secondary transition hover:border-primary hover:text-primary dark:border-dark-border dark:text-dark-text-secondary"
+                  onClick={closeRoomDrawer}
+                  disabled={roomSaving}
                 >
                   Cancel
                 </button>
-                <button type="submit" className="btn-primary" disabled={saving}>
-                  {saving ? "Saving..." : "Save changes"}
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2 text-sm font-semibold text-white shadow-soft transition hover:bg-primary-dark disabled:cursor-not-allowed disabled:bg-primary/60"
+                  onClick={handleRoomSave}
+                  disabled={roomSaving || roomUploading}
+                >
+                  {roomSaving ? "Saving…" : "Save changes"}
                 </button>
               </div>
-            </form>
-          </div>
+            </div>
+          </footer>
         </div>
-      )}
-    </div>
+      </div>
+    )
+    : null;
+
+  return (
+    <>
+      <div className="mx-auto w-full max-w-6xl space-y-8 overflow-x-hidden">
+        <header className="flex flex-wrap items-start justify-between gap-4 rounded-2xl border border-border bg-surface p-6 shadow-soft dark:border-dark-border dark:bg-dark-surface">
+          <div className="space-y-2">
+            <span className="text-xs font-semibold uppercase tracking-[0.25em] text-text-muted dark:text-dark-text-muted">
+              Details · {pageTitle}
+            </span>
+            <h1 className="text-3xl font-semibold text-text-primary dark:text-dark-text-primary">
+              {primaryTitle || pageTitle}
+            </h1>
+            <p className="max-w-2xl text-sm text-text-muted dark:text-dark-text-muted">
+              Review {resource} information, inspect linked resources, and manage records directly from this overview.
+            </p>
+          </div>
+          <span className="text-xs text-text-muted dark:text-dark-text-muted">
+            {loading ? "Loading details…" : data ? "Information loaded" : "No data"}
+          </span>
+        </header>
+
+        <section className="grid gap-8 overflow-hidden rounded-2xl border border-border bg-surface p-6 shadow-soft dark:border-dark-border dark:bg-dark-surface sm:p-8">
+          <div className="flex min-w-0 flex-col gap-6 lg:flex-row">
+            <div className="flex flex-col items-center gap-4 text-center lg:w-64">
+              <div className="h-40 w-40 overflow-hidden rounded-2xl border border-border/60 bg-background dark:border-dark-border dark:bg-dark-background">
+                <img src={imageSrc} alt={primaryTitle} className="h-full w-full object-cover" />
+              </div>
+              <div className="space-y-1">
+                <h1 className="text-2xl font-semibold text-text-primary dark:text-dark-text-primary">{primaryTitle}</h1>
+                {subTitle && <p className="text-sm text-text-muted dark:text-dark-text-muted">{subTitle}</p>}
+                {isUserResource && data && (
+                  <div className="flex flex-wrap items-center justify-center gap-2 pt-2 text-xs font-semibold">
+                    {data.superAdmin && <span className="badge badge-success">Super admin</span>}
+                    {!data.superAdmin && data.isAdmin && <span className="badge badge-info">Admin</span>}
+                    {!data.isAdmin && !data.superAdmin && <span className="badge badge-warning">Member</span>}
+                    {data.managedHotel && <span className="badge badge-primary">Manager</span>}
+                  </div>
+                )}
+                {isHotelResource && data && (
+                  <div className="flex flex-wrap items-center justify-center gap-2 pt-2 text-xs font-semibold">
+                    {data.type && <span className="badge badge-info">{formatLabel(data.type)}</span>}
+                    {data.featured && <span className="badge badge-success">Featured</span>}
+                    {data.cheapestPrice !== undefined && data.cheapestPrice !== null && (
+                      <span className="badge badge-primary">{formatCurrency(data.cheapestPrice)}</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="min-w-0 flex-1 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.25em] text-text-muted dark:text-dark-text-muted">
+                    Dashboard / {pageTitle}
+                  </p>
+                  <h2 className="text-xl font-semibold text-text-primary dark:text-dark-text-primary">{pageTitle}</h2>
+                </div>
+                <button
+                  type="button"
+                  className="rounded-lg border border-primary/30 px-4 py-2 text-sm font-semibold text-primary transition hover:bg-primary/10 disabled:cursor-not-allowed"
+                  disabled={!id}
+                  onClick={() => {
+                    if (isUserResource) {
+                      setFormState((prev) => {
+                        const source = prev || data || {};
+                        return {
+                          username: source.username || "",
+                          email: source.email || "",
+                          phone: source.phone || "",
+                          country: source.country || "",
+                          city: source.city || "",
+                          isAdmin: Boolean(source.isAdmin),
+                          superAdmin: Boolean(source.superAdmin),
+                          managedHotel: source.managedHotel?._id || source.managedHotel || "",
+                        };
+                      });
+                      resetPasswordForm();
+                      setSaveError("");
+                      setSaveSuccess("");
+                      setEditingUser(true);
+                      return;
+                    }
+
+                    if (isRoomResource && id) {
+                      openRoomDrawer();
+                      return;
+                    }
+
+                    if (resource === "hotels" && id) {
+                      navigate(`/hotels/${id}/edit`, { replace: false });
+                    }
+                  }}
+                >
+                  {isHotelResource ? "Edit hotel" : resource === "rooms" ? "Manage room" : "Manage"}
+                </button>
+              </div>
+
+              <div className="min-w-0 rounded-2xl border border-border/60 bg-background/60 p-5 dark:border-dark-border/60 dark:bg-dark-background/60 sm:p-6">
+                {loading && <div className="text-sm text-text-muted dark:text-dark-text-muted">Loading details…</div>}
+                {error && !loading && (
+                  <div className="rounded-lg border border-danger/20 bg-danger/10 px-4 py-3 text-sm text-danger">
+                    {error}
+                  </div>
+                )}
+                {!loading && !error && data && (
+                  <div className="space-y-6">
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                      {details.length ? (
+                        details.map(({ key, label, value }) => (
+                          <div key={key} className="rounded-xl border border-border/50 bg-white px-4 py-3 text-sm dark:border-dark-border/50 dark:bg-dark-surface/80">
+                            <span className="block text-xs font-semibold uppercase tracking-[0.2em] text-text-muted dark:text-dark-text-muted">
+                              {label}
+                            </span>
+                            <span className="block pt-1 text-text-primary dark:text-dark-text-primary">{value}</span>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="col-span-full rounded-lg border border-border/50 bg-white px-4 py-3 text-sm text-text-muted dark:border-dark-border/50 dark:bg-dark-surface/80 dark:text-dark-text-muted">
+                          No additional information available.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {isHotelResource && data && (
+          <section className="space-y-6 overflow-hidden rounded-2xl border border-border bg-surface p-6 shadow-soft dark:border-dark-border dark:bg-dark-surface sm:p-8">
+            <header className="flex flex-col gap-2">
+              <h2 className="text-xl font-semibold text-text-primary dark:text-dark-text-primary">Property highlights</h2>
+              <p className="text-sm text-text-muted dark:text-dark-text-muted">
+                Positioned details to help guests make quick decisions. Update these fields from the edit action if anything changes.
+              </p>
+            </header>
+
+            {hotelStats.length > 0 && (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {hotelStats.map(({ label, value }) => (
+                  <article key={label} className="rounded-xl border border-border/60 bg-background/60 px-5 py-4 text-sm dark:border-dark-border/60 dark:bg-dark-background/60">
+                    <span className="block text-xs font-semibold uppercase tracking-[0.2em] text-text-muted dark:text-dark-text-muted">
+                      {label}
+                    </span>
+                    <span className="block pt-2 text-text-primary dark:text-dark-text-primary">{value}</span>
+                  </article>
+                ))}
+              </div>
+            )}
+
+            {data.desc && (
+              <div className="rounded-xl border border-border/60 bg-background/60 px-5 py-4 text-sm dark:border-dark-border/60 dark:bg-dark-background/60">
+                <h3 className="mb-2 text-sm font-semibold text-text-primary dark:text-dark-text-primary">About this stay</h3>
+                <p className="text-text-muted dark:text-dark-text-muted">{data.desc}</p>
+              </div>
+            )}
+
+            {hotelGallery.length > 1 && (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {hotelGallery.map((photo, index) => (
+                  <figure key={photo} className="aspect-video overflow-hidden rounded-2xl border border-border/60 bg-background dark:border-dark-border">
+                    <img
+                      src={photo || PLACEHOLDER_IMAGE}
+                      alt={`Hotel visual ${index + 1}`}
+                      className="h-full w-full object-cover"
+                    />
+                  </figure>
+                ))}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-text-primary dark:text-dark-text-primary">Latest transactions</h3>
+                <Link to="/transactions" className="text-sm font-medium text-primary transition hover:text-primary-dark">
+                  View all
+                </Link>
+              </div>
+              <LatestTransactionsTable />
+            </div>
+          </section>
+        )}
+      </div>
+      {renderWithPortal(userModal)}
+      {renderWithPortal(roomModal)}
+    </>
   );
 };
 

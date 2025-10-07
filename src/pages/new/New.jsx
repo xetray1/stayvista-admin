@@ -1,10 +1,9 @@
-import "./new.scss";
-import Sidebar from "../../components/sidebar/Sidebar";
-import Navbar from "../../components/navbar/Navbar";
-import DriveFolderUploadOutlinedIcon from "@mui/icons-material/DriveFolderUploadOutlined";
 import { useRef, useState } from "react";
+import DriveFolderUploadOutlinedIcon from "@mui/icons-material/DriveFolderUploadOutlined";
 import axios from "axios";
-import { registerUser } from "../../api/services";
+import { registerUser } from "../../api/services.js";
+
+const PLACEHOLDER_IMAGE = "https://icon-library.com/images/no-image-icon/no-image-icon-0.jpg";
 
 const New = ({ inputs, title }) => {
   const [file, setFile] = useState(null);
@@ -14,15 +13,30 @@ const New = ({ inputs, title }) => {
   const [success, setSuccess] = useState("");
   const fileInputRef = useRef(null);
 
-  const handleChange = (e) => {
-    const { id, value } = e.target;
+  const handleChange = (event) => {
+    const { id, value } = event.target;
     setInfo((prev) => ({ ...prev, [id]: value }));
     setError("");
     setSuccess("");
   };
 
-  const handleClick = async (e) => {
-    e.preventDefault();
+  const handleFileChange = (event) => {
+    const selected = event.target.files?.[0] || null;
+    setFile(selected);
+    setError("");
+    setSuccess("");
+  };
+
+  const resetForm = () => {
+    setInfo({});
+    setFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
     if (submitting) return;
 
     setSubmitting(true);
@@ -43,94 +57,106 @@ const New = ({ inputs, title }) => {
         imageUrl = uploadRes.data.url;
       }
 
-      const newUser = {
+      const payload = {
         ...info,
         ...(imageUrl ? { img: imageUrl } : {}),
       };
 
-      await registerUser(newUser);
+      await registerUser(payload);
       setSuccess("User created successfully.");
-      setInfo({});
-      setFile(null);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
+      resetForm();
     } catch (err) {
-      setError(
-        err?.response?.data?.message || err?.message || "Failed to create user"
-      );
+      setError(err?.response?.data?.message || err?.message || "Failed to create user");
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <div className="new">
-      <Sidebar />
-      <div className="newContainer">
-        <Navbar />
-        <div className="top">
-          <h1>{title}</h1>
-          <p className="helper-text">Upload an avatar and fill out the details to add a new user.</p>
+    <div className="space-y-8">
+      <header className="flex flex-wrap items-start justify-between gap-6 rounded-2xl border border-border bg-surface p-6 shadow-soft dark:border-dark-border dark:bg-dark-surface">
+        <div className="space-y-2">
+          <span className="text-xs font-semibold uppercase tracking-[0.25em] text-text-muted dark:text-dark-text-muted">
+            Directory · Create user
+          </span>
+          <h1 className="text-3xl font-semibold text-text-primary dark:text-dark-text-primary">
+            {title}
+          </h1>
+          <p className="max-w-2xl text-sm text-text-muted dark:text-dark-text-muted">
+            Upload an avatar and fill out the essentials so new team members can jump into StayVista instantly.
+          </p>
         </div>
-        <div className="bottom">
-          <div className="left">
+        <span className="text-xs text-text-muted dark:text-dark-text-muted">
+          {submitting ? "Submitting user…" : success ? "User created" : "Awaiting submission"}
+        </span>
+      </header>
+
+      <section className="grid gap-8 rounded-2xl border border-border bg-surface p-8 shadow-soft dark:border-dark-border dark:bg-dark-surface lg:grid-cols-[320px,1fr]">
+        <div className="flex flex-col items-center gap-4">
+          <div className="relative h-48 w-48 overflow-hidden rounded-2xl border border-border/60 bg-background dark:border-dark-border dark:bg-dark-background">
             <img
-              src={
-                file
-                  ? URL.createObjectURL(file)
-                  : "https://icon-library.com/images/no-image-icon/no-image-icon-0.jpg"
-              }
-              alt=""
+              src={file ? URL.createObjectURL(file) : PLACEHOLDER_IMAGE}
+              alt="Preview"
+              className="h-full w-full object-cover"
             />
           </div>
-          <div className="right">
-            <form>
-              <div className="formInput">
-                <label htmlFor="file">
-                  Image: <DriveFolderUploadOutlinedIcon className="icon" />
-                </label>
-                <input
-                  type="file"
-                  id="file"
-                  onChange={(e) => {
-                    const selectedFile = e.target.files?.[0] || null;
-                    setFile(selectedFile);
-                    setError("");
-                    setSuccess("");
-                  }}
-                  ref={fileInputRef}
-                  style={{ display: "none" }}
-                />
-              </div>
-
-              {inputs.map((input) => (
-                <div className="formInput" key={input.id}>
-                  <label>{input.label}</label>
-                  <input
-                    onChange={handleChange}
-                    type={input.type}
-                    placeholder={input.placeholder}
-                    id={input.id}
-                    value={info[input.id] || ""}
-                    required={input.required ?? true}
-                  />
-                </div>
-              ))}
-              <button
-                type="button"
-                onClick={handleClick}
-                className="primary-button"
-                disabled={submitting}
-              >
-                {submitting ? "Creating..." : "Submit"}
-              </button>
-              {error && <div className="errorMessage">{error}</div>}
-              {success && <div className="successMessage">{success}</div>}
-            </form>
-          </div>
+          <label className="flex cursor-pointer items-center gap-2 rounded-full border border-border/60 px-4 py-2 text-sm font-semibold text-text-secondary transition hover:border-primary hover:text-primary dark:border-dark-border dark:text-dark-text-secondary dark:hover:border-primary dark:hover:text-primary">
+            <DriveFolderUploadOutlinedIcon fontSize="small" />
+            <span>Upload avatar</span>
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              className="hidden"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+            />
+          </label>
         </div>
-      </div>
+
+        <form className="grid gap-4" onSubmit={handleSubmit}>
+          {inputs.map((input) => (
+            <label key={input.id} className="grid gap-1 text-sm">
+              <span className="font-medium text-text-secondary dark:text-dark-text-secondary">
+                {input.label}
+              </span>
+              <input
+                id={input.id}
+                type={input.type}
+                placeholder={input.placeholder}
+                value={info[input.id] || ""}
+                onChange={handleChange}
+                required={input.required ?? true}
+                className="rounded-lg border border-border bg-white px-4 py-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-dark-border dark:bg-dark-background dark:text-dark-text-primary"
+              />
+            </label>
+          ))}
+
+          {success && (
+            <div className="rounded-lg border border-success/20 bg-success/10 px-4 py-2 text-sm text-success">
+              {success}
+            </div>
+          )}
+
+          {error && (
+            <div className="rounded-lg border border-danger/20 bg-danger/10 px-4 py-2 text-sm text-danger">
+              {error}
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <button
+              type="submit"
+              className="rounded-lg bg-primary px-5 py-3 text-sm font-semibold text-white transition hover:bg-primary-dark disabled:cursor-not-allowed disabled:bg-primary/60"
+              disabled={submitting}
+            >
+              {submitting ? "Creating…" : "Submit"}
+            </button>
+            <span className="text-xs text-text-muted dark:text-dark-text-muted">
+              All fields are required unless specified otherwise.
+            </span>
+          </div>
+        </form>
+      </section>
     </div>
   );
 };

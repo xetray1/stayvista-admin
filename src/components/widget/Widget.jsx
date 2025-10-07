@@ -1,4 +1,3 @@
-import "./widget.scss";
 import PersonOutlinedIcon from "@mui/icons-material/PersonOutlined";
 import HotelOutlinedIcon from "@mui/icons-material/HotelOutlined";
 import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
@@ -19,95 +18,96 @@ const formatCurrency = (value) =>
       })
     : value;
 
-const Widget = ({ type, value = 0, loading = false, link }) => {
-  let data;
+const iconMap = {
+  user: {
+    icon: PersonOutlinedIcon,
+    styles: "bg-rose-100 text-rose-500 dark:bg-rose-500/20 dark:text-rose-200",
+  },
+  hotel: {
+    icon: HotelOutlinedIcon,
+    styles: "bg-blue-100 text-blue-500 dark:bg-blue-500/20 dark:text-blue-200",
+  },
+  transaction: {
+    icon: ReceiptLongOutlinedIcon,
+    styles: "bg-amber-100 text-amber-500 dark:bg-amber-500/20 dark:text-amber-200",
+  },
+  revenue: {
+    icon: MonetizationOnOutlinedIcon,
+    styles: "bg-emerald-100 text-emerald-500 dark:bg-emerald-500/20 dark:text-emerald-200",
+  },
+};
 
-  switch (type) {
-    case "user":
-      data = {
-        title: "TOTAL USERS",
-        isMoney: false,
-        defaultLink: "Manage users",
-        icon: (
-          <PersonOutlinedIcon
-            className="icon"
-            style={{ color: "crimson", backgroundColor: "rgba(255, 0, 0, 0.2)" }}
-          />
-        ),
-      };
-      break;
-    case "hotel":
-      data = {
-        title: "TOTAL HOTELS",
-        isMoney: false,
-        defaultLink: "View hotel inventory",
-        icon: (
-          <HotelOutlinedIcon
-            className="icon"
-            style={{ color: "royalblue", backgroundColor: "rgba(65, 105, 225, 0.2)" }}
-          />
-        ),
-      };
-      break;
-    case "transaction":
-      data = {
-        title: "TRANSACTIONS",
-        isMoney: false,
-        defaultLink: "Review payments",
-        icon: (
-          <ReceiptLongOutlinedIcon
-            className="icon"
-            style={{ color: "darkorange", backgroundColor: "rgba(255, 165, 0, 0.2)" }}
-          />
-        ),
-      };
-      break;
-    case "revenue":
-      data = {
-        title: "TODAY'S REVENUE",
-        isMoney: true,
-        defaultLink: "View booking performance",
-        icon: (
-          <MonetizationOnOutlinedIcon
-            className="icon"
-            style={{ color: "green", backgroundColor: "rgba(0, 128, 0, 0.2)" }}
-          />
-        ),
-      };
-      break;
-    default:
-      data = {
-        title: type?.toUpperCase() || "METRIC",
-        isMoney: false,
-        defaultLink: "View details",
-        icon: null,
-      };
-  }
+const Widget = ({ type, value = 0, loading = false, link }) => {
+  const config = {
+    user: {
+      title: "Total Users",
+      isMoney: false,
+      defaultLink: "Manage users",
+    },
+    hotel: {
+      title: "Total Hotels",
+      isMoney: false,
+      defaultLink: "View hotel inventory",
+    },
+    transaction: {
+      title: "Transactions",
+      isMoney: false,
+      defaultLink: "Review payments",
+    },
+    revenue: {
+      title: "Today's Revenue",
+      isMoney: true,
+      defaultLink: "View booking performance",
+    },
+  }[type] || {
+    title: type?.toUpperCase() || "Metric",
+    isMoney: false,
+    defaultLink: "View details",
+  };
 
   const displayValue = loading
     ? "…"
-    : data.isMoney
+    : config.isMoney
     ? formatCurrency(value)
     : formatNumber(value);
 
-  const linkLabel = link?.label || link || data.defaultLink;
+  const linkLabel = link?.label || link || config.defaultLink;
   const linkPath = link?.to;
 
+  const IconInfo = iconMap[type];
+  const Icon = IconInfo?.icon;
+  const iconClasses = IconInfo?.styles || "bg-primary/10 text-primary";
+
   return (
-    <div className="widget">
-      <div className="left">
-        <span className="title">{data.title}</span>
-        <span className="counter">{displayValue}</span>
+    <article className="surface-card flex items-center justify-between gap-6 p-6 dark:border-dark-border dark:bg-dark-surface">
+      <div className="flex flex-col gap-2">
+        <span className="text-xs font-semibold uppercase tracking-[0.22em] text-text-muted dark:text-dark-text-muted">
+          {config.title}
+        </span>
+        <span className="text-3xl font-semibold text-text-primary dark:text-dark-text-primary">
+          {displayValue}
+        </span>
         {linkPath ? (
-          <Link to={linkPath} className="link">
+          <Link
+            to={linkPath}
+            className="text-sm font-medium text-primary transition hover:text-primary-dark"
+          >
             {linkLabel}
           </Link>
         ) : (
-          <span className="link">{linkLabel}</span>
+          <span className="text-sm font-medium text-primary dark:text-primary">
+            {linkLabel}
+          </span>
         )}
       </div>
-      <div className="right">{data.icon}</div>
-    </div>
+      {Icon && (
+        <div
+          className={`flex h-14 w-14 items-center justify-center rounded-full ${iconClasses}`}
+        >
+          <Icon fontSize="medium" />
+        </div>
+      )}
+    </article>
   );
 };
 

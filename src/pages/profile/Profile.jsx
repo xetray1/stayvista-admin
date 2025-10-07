@@ -1,12 +1,11 @@
-import "./profile.scss";
-import Sidebar from "../../components/sidebar/Sidebar";
-import Navbar from "../../components/navbar/Navbar";
-import { useContext, useEffect, useState } from "react";
-import { AuthContext } from "../../context/AuthContext";
+import { useContext, useEffect, useMemo, useState } from "react";
+import { AuthContext } from "../../context/AuthContext.js";
 import {
   fetchAvatarOptions,
   updateUserAvatar as updateUserAvatarApi,
-} from "../../api/services";
+} from "../../api/services.js";
+
+const PLACEHOLDER_IMAGE = "https://icon-library.com/images/no-image-icon/no-image-icon-0.jpg";
 
 const formatDate = (value) => {
   if (!value) return "—";
@@ -31,9 +30,7 @@ const Profile = () => {
         const options = await fetchAvatarOptions();
         setAvatars(options);
       } catch (err) {
-        setAvatarError(
-          err?.response?.data?.message || "Failed to load avatar options"
-        );
+        setAvatarError(err?.response?.data?.message || "Failed to load avatar options");
       } finally {
         setLoadingAvatars(false);
       }
@@ -58,102 +55,134 @@ const Profile = () => {
       const updated = await updateUserAvatarApi(user._id, selectedAvatar);
       dispatch({ type: "UPDATE_USER", payload: updated });
     } catch (err) {
-      setAvatarError(
-        err?.response?.data?.message || err?.message || "Failed to update avatar"
-      );
+      setAvatarError(err?.response?.data?.message || err?.message || "Failed to update avatar");
     } finally {
       setSaving(false);
     }
   };
 
-  const details = [
-    { label: "Username", value: user?.username },
-    { label: "Email", value: user?.email },
-    { label: "Phone", value: user?.phone },
-    { label: "Country", value: user?.country },
-    { label: "City", value: user?.city },
-    { label: "Role", value: user?.isAdmin ? "Administrator" : "Staff" },
-    { label: "Created", value: formatDate(user?.createdAt) },
-    { label: "Updated", value: formatDate(user?.updatedAt) },
-  ];
+  const details = useMemo(
+    () => [
+      { label: "Username", value: user?.username },
+      { label: "Email", value: user?.email },
+      { label: "Phone", value: user?.phone },
+      { label: "Country", value: user?.country },
+      { label: "City", value: user?.city },
+      { label: "Role", value: user?.isAdmin ? "Administrator" : "Staff" },
+      { label: "Created", value: formatDate(user?.createdAt) },
+      { label: "Updated", value: formatDate(user?.updatedAt) },
+    ],
+    [user]
+  );
 
   return (
-    <div className="profilePage">
-      <Sidebar />
-      <div className="profileContainer">
-        <Navbar />
-        <div className="profileContent">
-          <div className="summaryCard surface-card">
-            <div className="avatar">
-              <img
-                src={
-                  selectedAvatar ||
-                  user?.img ||
-                  "https://icon-library.com/images/no-image-icon/no-image-icon-0.jpg"
-                }
-                alt={user?.username || "User"}
-              />
-            </div>
-            <div className="summaryInfo">
-              <h1>{user?.username || "User"}</h1>
-              <p>{user?.email || "No email available"}</p>
-              <span className="badge primary">
-                {user?.isAdmin ? "Admin" : "Team Member"}
-              </span>
-            </div>
-            <div className="avatarActions">
-              <h3>Choose an avatar</h3>
-              {loadingAvatars ? (
-                <p className="helper-text">Loading avatars…</p>
-              ) : avatarError ? (
-                <div className="errorMessage inline">{avatarError}</div>
-              ) : (
-                <div className="avatarGrid">
-                  {avatars.map((img) => (
-                    <button
-                      key={img}
-                      type="button"
-                      className={`avatarOption${
-                        selectedAvatar === img ? " selected" : ""
-                      }`}
-                      onClick={() => handleAvatarSelect(img)}
-                    >
-                      <img src={img} alt="Avatar option" />
-                    </button>
-                  ))}
-                </div>
-              )}
-              <button
-                type="button"
-                className="primary-button saveAvatar"
-                onClick={handleAvatarSave}
-                disabled={
-                  saving ||
-                  !selectedAvatar ||
-                  selectedAvatar === user?.img ||
-                  !!avatarError
-                }
-              >
-                {saving ? "Saving…" : "Save avatar"}
-              </button>
-            </div>
-          </div>
+    <div className="space-y-8">
+      <header className="flex flex-wrap items-start justify-between gap-4 rounded-2xl border border-border bg-surface p-6 shadow-soft dark:border-dark-border dark:bg-dark-surface">
+        <div className="space-y-2">
+          <span className="text-xs font-semibold uppercase tracking-[0.25em] text-text-muted dark:text-dark-text-muted">
+            Account · Personal hub
+          </span>
+          <h1 className="text-3xl font-semibold text-text-primary dark:text-dark-text-primary">
+            Your profile overview
+          </h1>
+          <p className="max-w-2xl text-sm text-text-muted dark:text-dark-text-muted">
+            Review personal information, update your avatar, and confirm contact details used across the admin console.
+          </p>
+        </div>
+      </header>
 
-          <div className="detailsCard surface-card">
-            <div className="cardHeader">
-              <h2>Account Details</h2>
-            </div>
-            <div className="detailsGrid">
-              {details.map((item) => (
-                <div className="detail" key={item.label}>
-                  <span className="label">{item.label}</span>
-                  <span className="value">{item.value || "—"}</span>
-                </div>
-              ))}
-            </div>
+      <section className="grid gap-6 rounded-2xl border border-border bg-surface p-8 shadow-soft dark:border-dark-border dark:bg-dark-surface lg:grid-cols-[320px,1fr]">
+        <div className="flex flex-col items-center gap-4">
+          <div className="relative h-44 w-44 overflow-hidden rounded-2xl border border-border/60 bg-background dark:border-dark-border dark:bg-dark-background">
+            <img
+              src={
+                selectedAvatar || user?.img || PLACEHOLDER_IMAGE
+              }
+              alt={user?.username || "User avatar"}
+              className="h-full w-full object-cover"
+            />
+          </div>
+          <div className="text-center">
+            <h1 className="text-2xl font-semibold text-text-primary dark:text-dark-text-primary">
+              {user?.username || "User"}
+            </h1>
+            <p className="text-sm text-text-muted dark:text-dark-text-muted">
+              {user?.email || "No email available"}
+            </p>
+            <span className={`badge ${user?.isAdmin ? "badge-success" : "badge-info"}`}>
+              {user?.isAdmin ? "Admin" : "Team Member"}
+            </span>
           </div>
         </div>
-      </div>
+
+        <div className="grid gap-6">
+          <div>
+            <h2 className="text-lg font-semibold text-text-primary dark:text-dark-text-primary">
+              Choose an avatar
+            </h2>
+            {loadingAvatars ? (
+              <p className="text-sm text-text-muted dark:text-dark-text-muted">Loading avatars…</p>
+            ) : avatarError ? (
+              <div className="rounded-lg border border-danger/20 bg-danger/10 px-4 py-3 text-sm text-danger">
+                {avatarError}
+              </div>
+            ) : (
+              <div className="grid grid-cols-4 gap-3 sm:grid-cols-6">
+                {avatars.map((img) => (
+                  <button
+                    key={img}
+                    type="button"
+                    className={`overflow-hidden rounded-xl border-2 transition ${
+                      selectedAvatar === img
+                        ? "border-primary ring-2 ring-primary/30"
+                        : "border-transparent hover:border-border"
+                    }`}
+                    onClick={() => handleAvatarSelect(img)}
+                  >
+                    <img src={img} alt="Avatar option" className="h-16 w-16 object-cover" />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              type="button"
+              className="rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-white transition hover:bg-primary-dark disabled:cursor-not-allowed disabled:bg-primary/60"
+              onClick={handleAvatarSave}
+              disabled={
+                saving || !selectedAvatar || selectedAvatar === user?.img || Boolean(avatarError)
+              }
+            >
+              {saving ? "Saving…" : "Save avatar"}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section className="space-y-4 rounded-2xl border border-border bg-surface p-8 shadow-soft dark:border-dark-border dark:bg-dark-surface">
+        <header>
+          <h2 className="text-lg font-semibold text-text-primary dark:text-dark-text-primary">
+            Account details
+          </h2>
+        </header>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {details.map((item) => (
+            <div
+              key={item.label}
+              className="rounded-xl border border-border/60 bg-background/60 px-4 py-3 text-sm dark:border-dark-border/60 dark:bg-dark-background/60"
+            >
+              <span className="block text-xs font-semibold uppercase tracking-[0.2em] text-text-muted dark:text-dark-text-muted">
+                {item.label}
+              </span>
+              <span className="block pt-1 text-text-primary dark:text-dark-text-primary">
+                {item.value || "—"}
+              </span>
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   );
 };

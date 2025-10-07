@@ -1,17 +1,21 @@
 import axios from "axios";
-import { handleSessionExpiry } from "../utils/session";
+import { handleSessionExpiry } from "../utils/session.js";
 
 const apiClient = axios.create({
-  baseURL: process.env.REACT_APP_API_BASE_URL,
+  baseURL: import.meta.env.VITE_API_BASE_URL,
   withCredentials: true,
 });
 
 apiClient.interceptors.request.use((config) => {
   try {
     const storedUser = JSON.parse(localStorage.getItem("user"));
-    const scope = storedUser?.superAdmin ? "super" : storedUser?.isAdmin ? "admin" : "member";
+    const scope = storedUser?.superAdmin
+      ? "super"
+      : storedUser?.isAdmin
+      ? "admin"
+      : "member";
     config.headers["X-Session-Scope"] = scope;
-  } catch (err) {
+  } catch {
     config.headers["X-Session-Scope"] = "admin";
   }
   return config;

@@ -1,10 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
-import Sidebar from "../../components/sidebar/Sidebar";
-import Navbar from "../../components/navbar/Navbar";
-import Featured from "../../components/featured/Featured";
-import Chart from "../../components/chart/Chart";
-import { fetchAnalyticsSummary, fetchBookings, fetchTransactions } from "../../api/services";
-import "./stats.scss";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Featured from "../../components/featured/Featured.jsx";
+import Chart from "../../components/chart/Chart.jsx";
+import { fetchAnalyticsSummary, fetchBookings, fetchTransactions } from "../../api/services.js";
 
 const INITIAL_SUMMARY = {
   totalUsers: 0,
@@ -42,8 +39,7 @@ const formatCurrency = (value) =>
       })
     : "—";
 
-const formatNumber = (value) =>
-  typeof value === "number" ? value.toLocaleString("en-IN") : "—";
+const formatNumber = (value) => (typeof value === "number" ? value.toLocaleString("en-IN") : "—");
 
 const toPercent = (value, total) => {
   if (!total) return "0%";
@@ -75,7 +71,7 @@ const Stats = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const loadStats = async () => {
+  const loadStats = useCallback(async () => {
     setLoading(true);
     setError("");
 
@@ -99,36 +95,30 @@ const Stats = () => {
       }));
 
       const bookings = Array.isArray(bookingsData) ? bookingsData : [];
-      const bookingTally = bookings.reduce(
-        (acc, booking) => {
-          const key = normalizeBookingStatus(booking?.status);
-          acc[key] = (acc[key] || 0) + 1;
-          return acc;
-        },
-        { ...DEFAULT_BREAKDOWN }
-      );
+      const bookingTally = bookings.reduce((acc, booking) => {
+        const key = normalizeBookingStatus(booking?.status);
+        acc[key] = (acc[key] || 0) + 1;
+        return acc;
+      }, { ...DEFAULT_BREAKDOWN });
       setBookingsBreakdown(bookingTally);
 
       const transactions = Array.isArray(transactionsData) ? transactionsData : [];
-      const transactionTally = transactions.reduce(
-        (acc, transaction) => {
-          const key = normalizeTransactionStatus(transaction?.status);
-          acc[key] = (acc[key] || 0) + 1;
-          return acc;
-        },
-        { ...DEFAULT_TRANSACTION_BREAKDOWN }
-      );
+      const transactionTally = transactions.reduce((acc, transaction) => {
+        const key = normalizeTransactionStatus(transaction?.status);
+        acc[key] = (acc[key] || 0) + 1;
+        return acc;
+      }, { ...DEFAULT_TRANSACTION_BREAKDOWN });
       setTransactionsBreakdown(transactionTally);
     } catch (err) {
       setError(err?.response?.data?.message || err?.message || "Unable to load statistics.");
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadStats();
-  }, []);
+  }, [loadStats]);
 
   const insightCards = useMemo(
     () => [
@@ -160,107 +150,127 @@ const Stats = () => {
 
   const totalBookings = useMemo(
     () =>
-      Object.values(bookingsBreakdown).reduce((acc, count) => acc + (typeof count === "number" ? count : 0), 0),
+      Object.values(bookingsBreakdown).reduce(
+        (acc, count) => acc + (typeof count === "number" ? count : 0),
+        0
+      ),
     [bookingsBreakdown]
   );
 
   const totalTransactionsCount = useMemo(
     () =>
-      Object.values(transactionsBreakdown).reduce((acc, count) => acc + (typeof count === "number" ? count : 0), 0),
+      Object.values(transactionsBreakdown).reduce(
+        (acc, count) => acc + (typeof count === "number" ? count : 0),
+        0
+      ),
     [transactionsBreakdown]
   );
 
   return (
-    <div className="stats">
-      <Sidebar />
-      <div className="statsContainer">
-        <Navbar />
+    <div className="space-y-8">
+      <header className="flex flex-wrap items-start justify-between gap-6 rounded-2xl border border-border bg-surface p-6 shadow-soft dark:border-dark-border dark:bg-dark-surface">
+        <div className="space-y-3">
+          <span className="text-xs font-semibold uppercase tracking-[0.25em] text-text-muted dark:text-dark-text-muted">
+            Intelligence · Performance
+          </span>
+          <h1 className="text-3xl font-semibold text-text-primary dark:text-dark-text-primary">
+            Operations pulse
+          </h1>
+          <p className="max-w-2xl text-sm text-text-muted dark:text-dark-text-muted">
+            Review portfolio momentum across bookings, transactions, and revenue performance.
+          </p>
+        </div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <button
+            type="button"
+            className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-text-secondary transition hover:border-primary hover:text-primary dark:border-dark-border dark:text-dark-text-secondary"
+            onClick={loadStats}
+            disabled={loading}
+          >
+            {loading ? "Refreshing…" : "Refresh data"}
+          </button>
+          <span className="text-xs text-text-muted dark:text-dark-text-muted">
+            Snapshot updates in near real time
+          </span>
+        </div>
+      </header>
 
-        <header className="statsHeader surface-card">
-          <div className="statsMeta">
-            <span className="eyebrow">Intelligence · Performance</span>
-            <h1>Operations pulse</h1>
-            <p>Review portfolio momentum across bookings, transactions, and revenue performance.</p>
-          </div>
-          <div className="statsActions">
-            <button type="button" className="primary-button" onClick={loadStats} disabled={loading}>
-              {loading ? "Refreshing…" : "Refresh data"}
-            </button>
-          </div>
-        </header>
+      {error && (
+        <div className="rounded-xl border border-danger/20 bg-danger/10 px-4 py-3 text-sm text-danger">
+          {error}
+        </div>
+      )}
 
-        {error && <div className="statsError">{error}</div>}
-
-        <section className="insightGrid">
-          {insightCards.map((card) => (
-            <article key={card.label} className="insightCard surface-card">
-              <span className="insightLabel">{card.label}</span>
-              <span className="insightValue">{card.value}</span>
-              <span className="insightHelper">{card.helper}</span>
-            </article>
-          ))}
-        </section>
-
-        <section className="statsPanels">
-          <div className="panel surface-card">
-            <Featured
-              amount={summary.todayBookingAmount}
-              loading={loading}
-              comparison={summary.revenueComparison}
-            />
-          </div>
-          <div className="panel surface-card">
-            <Chart
-              title="Last 6 Months (Revenue)"
-              aspect={2 / 1}
-              data={summary.revenueTrend}
-              loading={loading}
-            />
-          </div>
-        </section>
-
-        <section className="breakdownRow">
-          <article className="breakdownCard surface-card">
-            <header>
-              <h2>Bookings status</h2>
-              <span>{formatNumber(totalBookings)} total</span>
-            </header>
-            <ul>
-              {Object.entries(bookingsBreakdown).map(([status, count]) => (
-                <li key={status}>
-                  <div className="label">
-                    <span className={`statusChip status-${status}`}>{status}</span>
-                  </div>
-                  <div className="value">
-                    <span>{formatNumber(count)}</span>
-                    <span className="percentage">{toPercent(count, totalBookings)}</span>
-                  </div>
-                </li>
-              ))}
-            </ul>
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {insightCards.map((card) => (
+          <article key={card.label} className="surface-card space-y-2 rounded-2xl border border-border bg-surface p-6 shadow-soft dark:border-dark-border dark:bg-dark-surface">
+            <span className="text-xs font-semibold uppercase tracking-[0.22em] text-text-muted dark:text-dark-text-muted">
+              {card.label}
+            </span>
+            <span className="block text-2xl font-semibold text-text-primary dark:text-dark-text-primary">
+              {card.value}
+            </span>
+            <span className="block text-sm text-text-muted dark:text-dark-text-muted">{card.helper}</span>
           </article>
+        ))}
+      </section>
 
-          <article className="breakdownCard surface-card">
-            <header>
-              <h2>Transactions status</h2>
-              <span>{formatNumber(totalTransactionsCount)} total</span>
-            </header>
-            <ul>
-              {Object.entries(transactionsBreakdown).map(([status, count]) => (
-                <li key={status}>
-                  <div className="label">
-                    <span className={`statusChip status-${status}`}>{status}</span>
-                  </div>
-                  <div className="value">
-                    <span>{formatNumber(count)}</span>
-                    <span className="percentage">{toPercent(count, totalTransactionsCount)}</span>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </article>
-        </section>
-      </div>
+      <section className="grid gap-6 lg:grid-cols-2">
+        <div className="rounded-2xl border border-border bg-surface p-6 shadow-soft dark:border-dark-border dark:bg-dark-surface">
+          <Featured amount={summary.todayBookingAmount} loading={loading} comparison={summary.revenueComparison} />
+        </div>
+        <div className="rounded-2xl border border-border bg-surface p-6 shadow-soft dark:border-dark-border dark:bg-dark-surface">
+          <Chart title="Last 6 Months (Revenue)" aspect={2 / 1} data={summary.revenueTrend} loading={loading} />
+        </div>
+      </section>
+
+      <section className="grid gap-6 lg:grid-cols-2">
+        <article className="space-y-4 rounded-2xl border border-border bg-surface p-6 shadow-soft dark:border-dark-border dark:bg-dark-surface">
+          <header className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-text-primary dark:text-dark-text-primary">Bookings status</h2>
+            <span className="text-sm text-text-muted dark:text-dark-text-muted">{formatNumber(totalBookings)} total</span>
+          </header>
+          <ul className="space-y-3">
+            {Object.entries(bookingsBreakdown).map(([status, count]) => (
+              <li key={status} className="flex items-center justify-between gap-4 text-sm">
+                <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-primary dark:bg-primary/20">
+                  {status}
+                </span>
+                <div className="flex items-center gap-3 text-text-primary dark:text-dark-text-primary">
+                  <span>{formatNumber(count)}</span>
+                  <span className="text-xs text-text-muted dark:text-dark-text-muted">
+                    {toPercent(count, totalBookings)}
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </article>
+
+        <article className="space-y-4 rounded-2xl border border-border bg-surface p-6 shadow-soft dark:border-dark-border dark:bg-dark-surface">
+          <header className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-text-primary dark:text-dark-text-primary">Transactions status</h2>
+            <span className="text-sm text-text-muted dark:text-dark-text-muted">
+              {formatNumber(totalTransactionsCount)} total
+            </span>
+          </header>
+          <ul className="space-y-3">
+            {Object.entries(transactionsBreakdown).map(([status, count]) => (
+              <li key={status} className="flex items-center justify-between gap-4 text-sm">
+                <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-primary dark:bg-primary/20">
+                  {status}
+                </span>
+                <div className="flex items-center gap-3 text-text-primary dark:text-dark-text-primary">
+                  <span>{formatNumber(count)}</span>
+                  <span className="text-xs text-text-muted dark:text-dark-text-muted">
+                    {toPercent(count, totalTransactionsCount)}
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </article>
+      </section>
     </div>
   );
 };

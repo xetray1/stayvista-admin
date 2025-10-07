@@ -1,4 +1,4 @@
-import "./navbar.scss";
+import MenuRoundedIcon from "@mui/icons-material/MenuRounded";
 import DarkModeOutlinedIcon from "@mui/icons-material/DarkModeOutlined";
 import KeyboardArrowDownRoundedIcon from "@mui/icons-material/KeyboardArrowDownRounded";
 import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
@@ -8,7 +8,7 @@ import { AuthContext } from "../../context/AuthContext";
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-const Navbar = () => {
+const Navbar = ({ onToggleSidebar = () => {} }) => {
   const { dispatch } = useContext(DarkModeContext);
   const { dispatch: authDispatch, user } = useContext(AuthContext);
   const navigate = useNavigate();
@@ -77,49 +77,78 @@ const Navbar = () => {
   };
 
   return (
-    <header className="navbar">
-      <div className="navbar__wrapper">
-        <div className="navbar__brand">
-          <h1 className="navbar__brandTitle">Admin Console</h1>
-        </div>
-
-        <div className="navbar__actions">
+    <header className="sticky top-0 z-40 border-b border-border bg-surface/80 backdrop-blur-lg dark:border-dark-border dark:bg-dark-surface/80">
+      <div className="flex items-center justify-between px-4 py-4 sm:px-6">
+        <div className="flex items-center gap-3">
           <button
             type="button"
-            className="navbar__action navbar__action--icon"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border text-text-secondary transition hover:border-primary/40 hover:bg-primary/10 hover:text-primary dark:border-dark-border dark:text-dark-text-secondary dark:hover:bg-primary/20 lg:hidden"
+            aria-label="Toggle navigation menu"
+            onClick={onToggleSidebar}
+          >
+            <MenuRoundedIcon fontSize="small" />
+          </button>
+          <h1 className="text-xl font-semibold text-text-primary dark:text-dark-text-primary">
+            Admin Console
+          </h1>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-transparent bg-primary/10 text-primary transition hover:bg-primary/20 dark:bg-primary/20"
             aria-label="Toggle dark mode"
             onClick={() => dispatch({ type: "TOGGLE" })}
           >
-            <DarkModeOutlinedIcon className="navbar__icon" />
+            <DarkModeOutlinedIcon fontSize="small" />
           </button>
 
-          <div ref={profileRef} className={`navbar__profile ${profileOpen ? "is-open" : ""}`}>
+          <div
+            ref={profileRef}
+            className={`relative ${profileOpen ? "is-open" : ""}`}
+          >
             <button
               type="button"
-              className="navbar__profileButton"
+              className="flex items-center gap-3 rounded-full border border-border bg-surface px-3 py-1.5 text-left transition hover:border-primary/40 hover:bg-primary/10 dark:border-dark-border dark:bg-dark-surface"
               onClick={toggleProfileMenu}
               aria-haspopup="menu"
               aria-expanded={profileOpen}
             >
-              <img src={profileAvatar} alt={profileName} className="navbar__avatar" />
-              <span className="navbar__profileDetails">
-                <span className="navbar__profileName">{profileName}</span>
-                <span className="navbar__profileRole">{profileRole}</span>
+              <img
+                src={profileAvatar}
+                alt={profileName}
+                className="h-10 w-10 rounded-full object-cover"
+              />
+              <span className="flex flex-col text-left">
+                <span className="text-sm font-medium text-text-primary dark:text-dark-text-primary">
+                  {profileName}
+                </span>
+                <span className="text-xs text-text-muted dark:text-dark-text-muted">
+                  {profileRole}
+                </span>
               </span>
-              <KeyboardArrowDownRoundedIcon className="navbar__chevron" />
+              <KeyboardArrowDownRoundedIcon
+                fontSize="small"
+                className={`text-text-muted transition duration-200 dark:text-dark-text-muted ${
+                  profileOpen ? "rotate-180" : ""
+                }`}
+              />
             </button>
 
             {profileOpen && (
-              <div className="navbar__menu" role="menu">
+              <div
+                className="absolute right-0 mt-2 w-52 overflow-hidden rounded-xl border border-border bg-surface shadow-soft dark:border-dark-border dark:bg-dark-surface"
+                role="menu"
+              >
                 {profileActions.map(({ label, Icon, onClick }) => (
                   <button
                     type="button"
                     key={label}
-                    className="navbar__menuItem"
+                    className="flex w-full items-center gap-3 px-4 py-2 text-sm text-text-secondary transition hover:bg-primary/10 hover:text-primary dark:text-dark-text-secondary dark:hover:bg-primary/20"
                     role="menuitem"
                     onClick={() => handleProfileAction(onClick)}
                   >
-                    <Icon fontSize="small" className="navbar__menuIcon" />
+                    {Icon ? <Icon fontSize="small" /> : null}
                     <span>{label}</span>
                   </button>
                 ))}
