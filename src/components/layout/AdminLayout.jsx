@@ -35,10 +35,8 @@ const AdminLayout = ({ children }) => {
 
         <div className="flex min-h-screen flex-1 flex-col lg:pl-64">
           <Navbar onToggleSidebar={handleSidebarToggle} />
-          <main className="flex-1 overflow-x-hidden overflow-y-auto bg-background px-4 pb-16 pt-6 sm:px-6 md:px-8 lg:px-10 dark:bg-dark-background">
-            <div className="mx-auto w-full max-w-7xl space-y-8">
-              {children}
-            </div>
+          <main className="flex-1 overflow-x-hidden overflow-y-auto bg-background px-4 py-6 sm:px-6 lg:px-8 dark:bg-dark-background">
+            {children}
           </main>
         </div>
       </div>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
 import TableCell from "@mui/material/TableCell";
@@ -8,6 +8,7 @@ import TableRow from "@mui/material/TableRow";
 import Paper from "@mui/material/Paper";
 import dayjs from "dayjs";
 import { fetchTransactions } from "../../api/services.js";
+import useWindowSize from "../../hooks/useWindowSize.js";
 
 const MAX_RECENT_TRANSACTIONS = 6;
 
@@ -47,24 +48,142 @@ const LatestTransactionsTable = () => {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const { width } = useWindowSize();
+  const isMobile = (width || 0) < 768;
+
+  const loadTransactions = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const data = await fetchTransactions({ limit: MAX_RECENT_TRANSACTIONS, sort: "-createdAt" });
+      setTransactions(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setError(err?.response?.data?.message || err?.message || "Failed to load transactions.");
+      setTransactions([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const loadTransactions = async () => {
-      setLoading(true);
-      setError("");
-      try {
-        const data = await fetchTransactions({ limit: MAX_RECENT_TRANSACTIONS, sort: "-createdAt" });
-        setTransactions(Array.isArray(data) ? data : []);
-      } catch (err) {
-        setError(err?.response?.data?.message || err?.message || "Failed to load transactions.");
-        setTransactions([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     loadTransactions();
-  }, []);
+  }, [loadTransactions]);
+
+  const emptyState = useMemo(() => {
+    if (loading) return "Loading latest transactions…";
+    if (error) return error;
+    return "No transactions captured yet.";
+  }, [error, loading]);
+
+  if (isMobile) {
+    return (
+      <div className="space-y-4">
+        {loading || error || transactions.length === 0 ? (
+          <div
+            className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-sm ${
+              error
+                ? "border-danger/30 bg-danger/10 text-danger"
+                : "border-border/60 bg-surface text-text-muted dark:border-dark-border/60 dark:bg-dark-surface/60 dark:text-dark-text-muted"
+            }`}
+          >
+            <span>{emptyState}</span>
+            {error && (
+              <button
+                type="button"
+                onClick={loadTransactions}
+                className="rounded-full border border-danger/40 px-3 py-1 text-xs font-semibold text-danger transition hover:bg-danger/10"
+                disabled={loading}
+              >
+                {loading ? "Retrying…" : "Retry"}
+              </button>
+            )}
+          </div>
+        ) : null}
+
+        {transactions.map((row) => {
+          const status = (row.status || "pending").toLowerCase();
+          const methodValue = (row.method || "manual").toLowerCase();
+
+          return (
+            <article
+              key={row._id}
+              className="space-y-3 rounded-2xl border border-border/60 bg-surface p-4 shadow-soft transition hover:border-primary/40 hover:shadow-medium dark:border-dark-border/60 dark:bg-dark-surface"
+            >
+              <header className="flex items-center justify-between gap-3">
+                <span className="font-mono text-xs text-text-muted dark:text-dark-text-muted">
+                  {normalizeText(row._id)}
+                </span>
+                <span
+                  className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wider ${
+                    status === "approved"
+                      ? "bg-green-100 text-success dark:bg-green-500/15 dark:text-[#4ade80]"
+                      : status === "pending"
+                      ? "bg-amber-100 text-warning dark:bg-amber-500/15 dark:text-[#fbbf24]"
+                      : "bg-red-100 text-danger dark:bg-red-500/15 dark:text-[#fca5a5]"
+                  }`}
+                >
+                  {formatStatus(row.status)}
+                </span>
+              </header>
+
+              <div className="grid gap-3 text-sm">
+                <div className="flex flex-col">
+                  <span className="text-xs uppercase tracking-[0.18em] text-text-muted dark:text-dark-text-muted">
+                    Guest
+                  </span>
+                  <span className="font-semibold text-text-primary dark:text-dark-text-primary">
+                    {normalizeText(row.user?.username || row.user?.email, "Guest")}
+                  </span>
+                  <span className="text-xs text-text-muted dark:text-dark-text-muted">
+                    {normalizeText(row.user?.email)}
+                  </span>
+                </div>
+
+                <div className="flex flex-col">
+                  <span className="text-xs uppercase tracking-[0.18em] text-text-muted dark:text-dark-text-muted">
+                    Hotel
+                  </span>
+                  <span className="font-semibold text-text-primary dark:text-dark-text-primary">
+                    {normalizeText(row.hotel?.name, "Unassigned hotel")}
+                  </span>
+                  <span className="text-xs text-text-muted dark:text-dark-text-muted">
+                    {normalizeText(row.booking?._id, "No booking linked")}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs uppercase tracking-[0.18em] text-text-muted dark:text-dark-text-muted">
+                    Amount
+                  </span>
+                  <span className="text-sm font-semibold text-text-primary dark:text-dark-text-primary">
+                    {formatAmount(row.amount)}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs uppercase tracking-[0.18em] text-text-muted dark:text-dark-text-muted">
+                    Method
+                  </span>
+                  <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium uppercase tracking-wider text-primary dark:bg-primary/20 dark:text-primary/90">
+                    {formatMethod(methodValue)}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs uppercase tracking-[0.18em] text-text-muted dark:text-dark-text-muted">
+                    Created
+                  </span>
+                  <span className="font-mono text-xs text-text-muted dark:text-dark-text-muted">
+                    {row.createdAt ? dayjs(row.createdAt).format("DD MMM, YYYY") : "—"}
+                  </span>
+                </div>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    );
+  }
 
   return (
     <TableContainer
@@ -176,7 +295,17 @@ const LatestTransactionsTable = () => {
             ) : error ? (
               <TableRow>
                 <TableCell colSpan={7} className="text-center text-sm text-danger">
-                  {error}
+                  <div className="flex flex-wrap items-center justify-center gap-3">
+                    <span>{error}</span>
+                    <button
+                      type="button"
+                      onClick={loadTransactions}
+                      className="rounded-full border border-danger/40 px-3 py-1 text-xs font-semibold text-danger transition hover:bg-danger/10"
+                      disabled={loading}
+                    >
+                      {loading ? "Retrying…" : "Retry"}
+                    </button>
+                  </div>
                 </TableCell>
               </TableRow>
             ) : transactions.length === 0 ? (

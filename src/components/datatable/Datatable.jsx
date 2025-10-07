@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { DataGrid } from "@mui/x-data-grid";
+import useWindowSize from "../../hooks/useWindowSize.js";
 import { deleteResource, fetchCollection } from "../../api/services.js";
 
 const Datatable = ({ columns }) => {
@@ -10,6 +11,9 @@ const Datatable = ({ columns }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [toast, setToast] = useState(null);
+  const { width } = useWindowSize();
+
+  const isMobile = (width || 0) < 640;
 
   const errorMessage =
     error?.response?.data?.message || error?.message || (error ? "Failed to load data" : "");
@@ -102,58 +106,60 @@ const Datatable = ({ columns }) => {
   };
 
   const actionColumn = useMemo(
-    () => [
-      {
-        field: "action",
-        headerName: "Action",
-        width: 180,
-        sortable: false,
-        filterable: false,
-        renderCell: (params) => (
-          <div className="flex items-center gap-2">
-            <Link
-              to={`/${path}/${params.row._id}`}
-              className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary transition hover:bg-primary/20"
-            >
-              View
-            </Link>
-            <button
-              type="button"
-              className="rounded-full bg-danger/10 px-3 py-1 text-xs font-semibold text-danger transition hover:bg-danger/20"
-              onClick={() => handleDelete(params.row._id)}
-            >
-              Delete
-            </button>
-          </div>
-        ),
-      },
-    ],
+    () => ({
+      field: "action",
+      headerName: "Action",
+      width: 160,
+      sortable: false,
+      filterable: false,
+      renderCell: (params) => (
+        <div className="flex items-center gap-2">
+          <Link
+            to={`/${path}/${params.row._id}`}
+            className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary transition hover:bg-primary/20"
+          >
+            View
+          </Link>
+          <button
+            type="button"
+            className="rounded-full bg-danger/10 px-3 py-1 text-xs font-semibold text-danger transition hover:bg-danger/20"
+            onClick={() => handleDelete(params.row._id)}
+          >
+            Delete
+          </button>
+        </div>
+      ),
+    }),
     [handleDelete, path]
   );
 
-  const compactColumns = useMemo(
-    () =>
-      columns
-        .filter((column) => column.field && column.field !== "action")
-        .map((column) => ({
-          field: column.field,
-          headerName: column.headerName || column.field,
-        })),
-    [columns],
-  );
+  const resolvedColumns = useMemo(() => {
+    if (!Array.isArray(columns) || !columns.length) return [actionColumn];
+    if (!isMobile) return [...columns, actionColumn];
 
-  const renderCompactValue = (row, field) => {
-    if (!field) return undefined;
-    const value = row?.[field];
-    if (value === undefined || value === null || value === "") return "—";
-    if (typeof value === "number") return value.toLocaleString();
-    if (Array.isArray(value)) return value.length ? value.join(", ") : "—";
-    if (typeof value === "object") {
-      const label = value?.name || value?.title || value?.username || value?.email || value?._id;
-      return label || JSON.stringify(value);
-    }
-    return String(value);
-  };
+    const condensed = columns
+      .filter((column) => column.field === "title" || column.field === "username" || column.field === "name")
+      .map((column) => ({
+        ...column,
+        flex: 1,
+        minWidth: 160,
+      }));
+
+    const fallback = condensed.length ? condensed : columns.slice(0, 2);
+    return [...fallback, { ...actionColumn, width: 140 }];
+  }, [actionColumn, columns, isMobile]);
+
+  const columnVisibilityModel = useMemo(() => {
+    if (!isMobile) return undefined;
+    if (!Array.isArray(columns)) return undefined;
+    const visibility = {};
+    columns.forEach((column) => {
+      if (column.field && column.field !== "title" && column.field !== "username" && column.field !== "name") {
+        visibility[column.field] = false;
+      }
+    });
+    return visibility;
+  }, [columns, isMobile]);
 
   return (
     <section className="space-y-6 rounded-3xl border border-border/60 bg-surface/80 p-6 shadow-medium backdrop-blur-xl dark:border-dark-border/70 dark:bg-dark-surface/60">
@@ -183,7 +189,17 @@ const Datatable = ({ columns }) => {
 
       {errorMessage && (
         <div className="rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm font-medium text-danger">
-          {errorMessage}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span>{errorMessage}</span>
+            <button
+              type="button"
+              className="rounded-full border border-danger/40 px-3 py-1 text-xs font-semibold text-danger transition hover:bg-danger/10"
+              onClick={loadData}
+              disabled={loading}
+            >
+              {loading ? "Retrying…" : "Retry"}
+            </button>
+          </div>
         </div>
       )}
 
@@ -200,80 +216,12 @@ const Datatable = ({ columns }) => {
         </div>
       )}
 
-      <div className="grid gap-4 lg:hidden">
-        {loading ? (
-          <div className="animate-pulse space-y-3 rounded-2xl border border-border/60 bg-surface/80 p-4 dark:border-dark-border/60 dark:bg-dark-surface/70">
-            <div className="h-4 rounded bg-border/70 dark:bg-dark-border/60" />
-            <div className="h-4 rounded bg-border/50 dark:bg-dark-border/40" />
-            <div className="h-4 w-2/3 rounded bg-border/40 dark:bg-dark-border/30" />
-          </div>
-        ) : rows.length === 0 ? (
-          <div className="rounded-2xl border border-border/60 bg-surface/80 p-4 text-sm text-text-muted dark:border-dark-border/60 dark:bg-dark-surface/70 dark:text-dark-text-muted">
-            No records available yet.
-          </div>
-        ) : (
-          rows.map((row) => {
-            const primaryField = compactColumns[0]?.field;
-            const secondaryField = compactColumns[1]?.field;
-            const primaryText = renderCompactValue(row, primaryField) || row?.title || row?.name || row?._id || "Record";
-            const secondaryText = renderCompactValue(row, secondaryField);
-
-            return (
-            <article
-              key={row._id}
-              className="space-y-3 rounded-2xl border border-border/60 bg-surface/95 p-4 shadow-soft dark:border-dark-border/60 dark:bg-dark-surface/80"
-            >
-              <header className="flex items-start justify-between gap-3">
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold text-text-primary dark:text-dark-text-primary">
-                    {primaryText}
-                  </p>
-                  {secondaryField && (
-                    <p className="text-xs text-text-muted dark:text-dark-text-muted">
-                      {secondaryText}
-                    </p>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <Link
-                    to={`/${path}/${row._id}`}
-                    className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary transition hover:bg-primary/20"
-                  >
-                    View
-                  </Link>
-                  <button
-                    type="button"
-                    className="rounded-full bg-danger/10 px-3 py-1 text-xs font-semibold text-danger transition hover:bg-danger/20"
-                    onClick={() => handleDelete(row._id)}
-                  >
-                    Delete
-                  </button>
-                </div>
-              </header>
-              <dl className="grid gap-2 text-xs">
-                {compactColumns.slice(2).map((column) => (
-                  <div key={column.field} className="flex flex-col gap-1 rounded-xl border border-border/40 bg-background/70 px-3 py-2 dark:border-dark-border/40 dark:bg-dark-background/60">
-                    <dt className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted dark:text-dark-text-muted">
-                      {column.headerName}
-                    </dt>
-                    <dd className="text-sm font-medium text-text-secondary dark:text-dark-text-secondary">
-                      {renderCompactValue(row, column.field)}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-            </article>
-            );
-          })
-        )}
-      </div>
-
-      <div className="hidden overflow-x-auto rounded-[24px] border border-border/50 bg-surface/95 shadow-soft dark:border-dark-border/60 dark:bg-dark-surface/80 lg:block">
+      <div className="overflow-x-auto rounded-[24px] border border-border/50 bg-surface/95 shadow-soft dark:border-dark-border/60 dark:bg-dark-surface/80">
         <DataGrid
-          className="min-w-[720px] !border-none !bg-transparent"
+          className="min-w-full sm:min-w-[680px] !border-none !bg-transparent"
           autoHeight
           rows={rows}
-          columns={[...columns, ...actionColumn]}
+          columns={resolvedColumns}
           getRowId={(row) => row._id}
           disableRowSelectionOnClick
           loading={loading}
@@ -282,6 +230,8 @@ const Datatable = ({ columns }) => {
           initialState={{ pagination: { paginationModel: { pageSize: 9 } } }}
           rowHeight={64}
           columnHeaderHeight={56}
+          columnVisibilityModel={columnVisibilityModel}
+          onColumnVisibilityModelChange={() => {}}
           sx={{
             borderRadius: "24px",
             border: "1px solid rgba(148, 163, 184, 0.16)",

@@ -1,12 +1,29 @@
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { fetchResourceById, updateUser, resetUserPassword, updateRoom, uploadRoomImage } from "../../api/services.js";
+import {
+  fetchResourceById,
+  updateUser,
+  resetUserPassword,
+  updateRoom,
+  uploadRoomImage,
+  fetchCollection,
+} from "../../api/services.js";
 import { AuthContext } from "../../context/AuthContext.js";
 import LatestTransactionsTable from "../../components/table/LatestTransactionsTable.jsx";
 
 const PLACEHOLDER_IMAGE = "https://icon-library.com/images/no-image-icon/no-image-icon-0.jpg";
 const MAX_ROOM_IMAGES = 6;
+
+const normalizeManagedHotelValue = (value) => {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "object") {
+    if (typeof value._id === "string") return value._id;
+    if (typeof value.id === "string") return value.id;
+  }
+  return "";
+};
 
 const normalizeRoom = (room = {}) => {
   const photos = Array.isArray(room.photos) ? room.photos.filter(Boolean) : [];
@@ -184,6 +201,10 @@ const Single = () => {
   const [resetSuccess, setResetSuccess] = useState("");
   const { user: authUser, dispatch } = useContext(AuthContext);
   const isMounted = useRef(true);
+
+  const [hotelOptions, setHotelOptions] = useState([]);
+  const [loadingHotels, setLoadingHotels] = useState(false);
+  const [hotelOptionsError, setHotelOptionsError] = useState("");
 
   const [editingRoom, setEditingRoom] = useState(false);
   const [roomForm, setRoomForm] = useState(null);
@@ -454,6 +475,57 @@ const Single = () => {
     }
   }, [isRoomResource]);
 
+  useEffect(() => {
+    if (!editingUser || !isUserResource || !authUser?.superAdmin) return undefined;
+
+    let active = true;
+
+    const loadHotels = async () => {
+      setLoadingHotels(true);
+      setHotelOptionsError("");
+      try {
+        const hotels = await fetchCollection("hotels");
+        if (!active) return;
+        const normalized = Array.isArray(hotels)
+          ? hotels
+              .map((hotel) => ({
+                id: normalizeManagedHotelValue(hotel),
+                name: hotel?.name || hotel?.title || "",
+                city: hotel?.city || "",
+              }))
+              .filter((option) => option.id && option.name)
+              .sort((a, b) => a.name.localeCompare(b.name))
+          : [];
+        setHotelOptions(normalized);
+      } catch (err) {
+        if (!active) return;
+        setHotelOptionsError(err?.response?.data?.message || err?.message || "Failed to load hotels.");
+        setHotelOptions([]);
+      } finally {
+        if (active) setLoadingHotels(false);
+      }
+    };
+
+    loadHotels();
+
+    return () => {
+      active = false;
+    };
+  }, [editingUser, isUserResource, authUser?.superAdmin]);
+
+  const selectedManagedHotelId = formState?.superAdmin
+    ? ""
+    : normalizeManagedHotelValue(formState?.managedHotel);
+  const shouldShowManagedHotelFallbackOption = Boolean(
+    selectedManagedHotelId && !hotelOptions.some((option) => option.id === selectedManagedHotelId)
+  );
+  const managedHotelFallbackLabel = (() => {
+    if (!data?.managedHotel) return "Current selection";
+    const name = data.managedHotel?.name || data.managedHotel?.title || "Current selection";
+    const city = data.managedHotel?.city ? ` · ${data.managedHotel.city}` : "";
+    return `${name}${city}`;
+  })();
+
   const hotelStats = useMemo(() => {
     if (!isHotelResource || !data) return [];
     return [
@@ -506,6 +578,9 @@ const Single = () => {
                   isAdmin: Boolean(formState.isAdmin),
                   superAdmin: Boolean(formState.superAdmin),
                 };
+                payload.managedHotel = payload.superAdmin
+                  ? ""
+                  : normalizeManagedHotelValue(formState.managedHotel);
 
                 const updated = await updateUser(id, payload);
                 if (!isMounted.current) return;
@@ -519,7 +594,7 @@ const Single = () => {
                   city: updated?.city || "",
                   isAdmin: Boolean(updated?.isAdmin),
                   superAdmin: Boolean(updated?.superAdmin),
-                  managedHotel: updated?.superAdmin ? "" : updated?.managedHotel?._id || updated?.managedHotel || "",
+                  managedHotel: updated?.superAdmin ? "" : normalizeManagedHotelValue(updated?.managedHotel),
                 }));
                 if (authUser?._id === updated._id) {
                   dispatch({ type: "UPDATE_USER", payload: updated });
@@ -554,6 +629,46 @@ const Single = () => {
                   />
                 </label>
               ))}
+              {authUser?.superAdmin && (
+                <label className="grid gap-1 text-sm">
+                  <span className="font-medium text-text-secondary dark:text-dark-text-secondary">Managed Hotel</span>
+                  <select
+                    value={selectedManagedHotelId}
+                    onChange={(event) => {
+                      const nextValue = event.target.value;
+                      setFormState((prev) => ({
+                        ...prev,
+                        managedHotel: nextValue,
+                        isAdmin: nextValue ? true : prev.isAdmin,
+                      }));
+                    }}
+                    disabled={formState.superAdmin || loadingHotels}
+                    className="rounded-lg border border-border bg-white px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:bg-surface/70 dark:border-dark-border dark:bg-dark-background dark:text-dark-text-primary dark:disabled:bg-dark-surface/70"
+                  >
+                    <option value="">No managed hotel</option>
+                    {shouldShowManagedHotelFallbackOption && (
+                      <option value={selectedManagedHotelId}>{managedHotelFallbackLabel}</option>
+                    )}
+                    {hotelOptions.map((hotel) => (
+                      <option key={hotel.id} value={hotel.id}>
+                        {hotel.name}
+                        {hotel.city ? ` · ${hotel.city}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  {loadingHotels && (
+                    <span className="text-xs text-text-muted dark:text-dark-text-muted">Loading hotel list…</span>
+                  )}
+                  {hotelOptionsError && (
+                    <div className="rounded-lg border border-danger/20 bg-danger/10 px-3 py-2 text-xs text-danger">
+                      {hotelOptionsError}
+                    </div>
+                  )}
+                  <span className="text-xs text-text-muted dark:text-dark-text-muted">
+                    Assigning a hotel automatically gives this user property manager access.
+                  </span>
+                </label>
+              )}
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
@@ -572,9 +687,14 @@ const Single = () => {
                 <input
                   type="checkbox"
                   checked={formState.superAdmin}
-                  onChange={(event) =>
-                    setFormState((prev) => ({ ...prev, superAdmin: event.target.checked }))
-                  }
+                  onChange={(event) => {
+                    const checked = event.target.checked;
+                    setFormState((prev) => ({
+                      ...prev,
+                      superAdmin: checked,
+                      managedHotel: checked ? "" : normalizeManagedHotelValue(prev.managedHotel),
+                    }));
+                  }}
                   className="h-4 w-4"
                 />
                 <span>Grant super-admin access</span>
@@ -1114,7 +1234,9 @@ const Single = () => {
                           city: source.city || "",
                           isAdmin: Boolean(source.isAdmin),
                           superAdmin: Boolean(source.superAdmin),
-                          managedHotel: source.managedHotel?._id || source.managedHotel || "",
+                          managedHotel: source.superAdmin
+                            ? ""
+                            : normalizeManagedHotelValue(source.managedHotel),
                         };
                       });
                       resetPasswordForm();

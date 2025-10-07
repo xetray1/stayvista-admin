@@ -1,5 +1,5 @@
 import DriveFolderUploadOutlinedIcon from "@mui/icons-material/DriveFolderUploadOutlined";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { hotelInputs } from "../../formSource.js";
 import {
@@ -66,7 +66,7 @@ const NewHotel = () => {
   const [rooms, setRooms] = useState([]);
   const [roomOptions, setRoomOptions] = useState([]);
   const [roomsLoading, setRoomsLoading] = useState(false);
-  const [roomsError, setRoomsError] = useState("\u2014");
+  const [roomsError, setRoomsError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [submitSuccess, setSubmitSuccess] = useState("");
@@ -75,22 +75,22 @@ const NewHotel = () => {
 
   const requiredFields = useMemo(() => hotelInputs.map((input) => input.id), []);
 
-  useEffect(() => {
-    const loadRooms = async () => {
-      setRoomsLoading(true);
-      try {
-        const data = await fetchCollection("rooms");
-        setRoomOptions(Array.isArray(data) ? data : []);
-        setRoomsError("");
-      } catch (err) {
-        setRoomsError(err?.response?.data?.message || err?.message || "Failed to load rooms");
-      } finally {
-        setRoomsLoading(false);
-      }
-    };
-
-    loadRooms();
+  const loadRooms = useCallback(async () => {
+    setRoomsLoading(true);
+    try {
+      const data = await fetchCollection("rooms");
+      setRoomOptions(Array.isArray(data) ? data : []);
+      setRoomsError("");
+    } catch (err) {
+      setRoomsError(err?.response?.data?.message || err?.message || "Failed to load rooms");
+    } finally {
+      setRoomsLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadRooms();
+  }, [loadRooms]);
 
   useEffect(() => {
     if (!files.length) {
@@ -300,7 +300,7 @@ const NewHotel = () => {
       </header>
 
       <form className="grid gap-8" onSubmit={handleSubmit}>
-        <section className="grid gap-6 rounded-2xl border border-border bg-surface p-6 shadow-soft dark:border-dark-border dark:bg-dark-surface lg:grid-cols-[320px,1fr]">
+        <section className="grid gap-6 rounded-2xl border border-border bg-surface p-6 shadow-soft dark:border-dark-border dark:bg-dark-surface md:grid-cols-1 lg:grid-cols-[minmax(0,320px)_1fr]">
           <div className="space-y-4">
             <div className="h-64 overflow-hidden rounded-2xl border border-border/60 bg-background dark:border-dark-border dark:bg-dark-background">
               <img src={heroImageSrc} alt="Primary hotel preview" className="h-full w-full object-cover" />
@@ -326,13 +326,13 @@ const NewHotel = () => {
           </div>
 
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
               {existingPhotos.map((url, index) => (
-                <div key={`existing-${url}-${index}`} className="group relative aspect-square overflow-hidden rounded-xl border border-border/60 shadow-sm transition hover:shadow-md dark:border-dark-border/60">
+                <div key={`existing-${url}-${index}`} className="relative h-28 overflow-hidden rounded-xl border border-border/60 dark:border-dark-border/60">
                   <img src={url} alt={`Hotel existing ${index + 1}`} className="h-full w-full object-cover" />
                   <button
                     type="button"
-                    className="absolute inset-x-1 top-1 hidden rounded-full bg-slate-900/80 px-2 py-0.5 text-xs text-white group-hover:flex"
+                    className="absolute right-1 top-1 rounded-full bg-slate-900/80 px-2 py-0.5 text-xs text-white"
                     onClick={() => handleRemoveExistingPhoto(index)}
                     disabled={submitting || initializing}
                   >
@@ -341,11 +341,11 @@ const NewHotel = () => {
                 </div>
               ))}
               {previewUrls.map((url, index) => (
-                <div key={`preview-${url}-${index}`} className="group relative aspect-square overflow-hidden rounded-xl border border-border/60 shadow-sm transition hover:shadow-md dark:border-dark-border/60">
+                <div key={`preview-${url}-${index}`} className="relative h-28 overflow-hidden rounded-xl border border-border/60 dark:border-dark-border/60">
                   <img src={url} alt={`Hotel preview ${index + 1}`} className="h-full w-full object-cover" />
                   <button
                     type="button"
-                    className="absolute inset-x-1 top-1 hidden rounded-full bg-slate-900/80 px-2 py-0.5 text-xs text-white group-hover:flex"
+                    className="absolute right-1 top-1 rounded-full bg-slate-900/80 px-2 py-0.5 text-xs text-white"
                     onClick={() => handleRemoveNewImage(index)}
                     disabled={submitting || initializing}
                   >
@@ -427,7 +427,7 @@ const NewHotel = () => {
                 value={info.featured || "false"}
                 onChange={handleChange}
                 disabled={submitting || initializing}
-                className="rounded-lg border border-border bg-white px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-dark-border dark:bg-dark-background dark:text-dark-text-primary"
+                className="rounded-lg border border-border bg-white px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 dark;border-dark-border dark:bg-dark-background dark:text-dark-text-primary"
               >
                 <option value="false">No</option>
                 <option value="true">Yes</option>
@@ -435,7 +435,7 @@ const NewHotel = () => {
             </label>
           </div>
 
-          <div className="space-y-4 md:space-y-6 lg:space-y-8">
+          <div className="space-y-2">
             <div className="space-y-1">
               <h2 className="text-lg font-semibold text-text-primary dark:text-dark-text-primary">
                 Rooms & availability
@@ -444,19 +444,18 @@ const NewHotel = () => {
                 Select which room types belong to this property (optional). Hold Ctrl/Cmd to select multiple.
               </p>
             </div>
-            <div className="grid gap-4 md:gap-6 lg:gap-8 lg:grid-cols-[minmax(0,260px),1fr]">
-              <label className="grid gap-1 text-sm">
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,260px),1fr]">
+              <label className="grid gap-2 text-sm">
                 <span className="font-medium text-text-secondary dark:text-dark-text-secondary">Rooms</span>
                 <select
-                  id="rooms"
                   multiple
-                  onChange={handleSelect}
                   value={rooms}
+                  onChange={handleSelect}
                   disabled={roomsLoading || submitting || initializing}
-                  className="h-40 rounded-lg border border-border bg-white px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-dark-border dark:bg-dark-background dark:text-dark-text-primary"
+                  className="min-h-[10rem] rounded-lg border border-border bg-white px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-dark-border dark:bg-dark-background dark:text-dark-text-primary"
                 >
                   {roomsLoading && <option disabled>Loading rooms…</option>}
-                  {roomsError && !roomsLoading && <option disabled>{roomsError}</option>}
+                  {roomsError && !roomsLoading && <option disabled>{roomsError || "Failed to load rooms"}</option>}
                   {!roomsLoading && !roomsError &&
                     roomOptions.map((room) => (
                       <option key={room._id} value={room._id}>
@@ -464,27 +463,38 @@ const NewHotel = () => {
                       </option>
                     ))}
                 </select>
-              </label>
-              <div className="space-y-2 text-sm text-text-muted dark:text-dark-text-muted">
-                {selectedRoomDetails.length ? (
-                  <div className="flex flex-wrap gap-2">
-                    {selectedRoomDetails.map((room) => (
-                      <span key={room._id} className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary dark:bg-primary/20">
-                        {room.title}
-                      </span>
-                    ))}
+                {roomsError && !roomsLoading && (
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-danger">
+                    <span>{roomsError || "Failed to load rooms"}</span>
+                    <button
+                      type="button"
+                      onClick={loadRooms}
+                      className="rounded-full border border-danger/40 px-3 py-1 font-semibold text-danger transition hover:bg-danger/10"
+                      disabled={roomsLoading}
+                    >
+                      Retry
+                    </button>
                   </div>
-                ) : (
-                  <p>No rooms selected yet.</p>
                 )}
-              </div>
+              </label>
+
+              {!!selectedRoomDetails.length && (
+                <div className="grid gap-3 rounded-xl border border-border/60 bg-background/60 p-4 text-sm dark:border-dark-border/60 dark:bg-dark-background/60">
+                  <ul className="flex flex-wrap gap-2">
+                    {selectedRoomDetails.map((room) => (
+                      <li key={room._id} className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary dark:bg-primary/20">
+                        {room.title}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="submit"
-              className="rounded-lg bg-primary px-5 py-3 text-sm font-semibold text-white transition hover:bg-primary-dark disabled:cursor-not-allowed disabled:bg-primary/60"
               disabled={submitting || initializing}
             >
               {submitting ? (isEditMode ? "Saving..." : "Creating...") : isEditMode ? "Save changes" : "Create hotel"}
