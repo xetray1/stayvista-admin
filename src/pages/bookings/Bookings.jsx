@@ -9,6 +9,7 @@ import Paper from "@mui/material/Paper";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import { deleteResource, fetchBookings, updateBookingStatus } from "../../api/services.js";
+import { extractApiErrorMessage } from "../../utils/error.js";
 
 dayjs.extend(relativeTime);
 
@@ -218,7 +219,7 @@ const Bookings = () => {
         .filter(Boolean);
       setBookings(normalized);
     } catch (err) {
-      setError(err?.response?.data?.message || err?.message || "Failed to fetch bookings");
+      setError(extractApiErrorMessage(err, "Failed to fetch bookings"));
     } finally {
       setLoading(false);
     }
@@ -240,7 +241,7 @@ const Bookings = () => {
       }
       setBookings((prev) => prev.map((booking) => (booking.id === bookingId ? nextPayload : booking)));
     } catch (err) {
-      setError(err?.response?.data?.message || err?.message || "Failed to update booking status");
+      setError(extractApiErrorMessage(err, "Failed to update booking status"));
     } finally {
       setUpdating(false);
     }
@@ -258,7 +259,7 @@ const Bookings = () => {
         await deleteResource("bookings", bookingId);
         setBookings((prev) => prev.filter((booking) => booking.id !== bookingId));
       } catch (err) {
-        setError(err?.response?.data?.message || err?.message || "Failed to delete booking");
+        setError(extractApiErrorMessage(err, "Failed to delete booking"));
       } finally {
         setDeletingId("");
       }
@@ -322,7 +323,7 @@ const Bookings = () => {
 
       {statusCards.length > 0 && (
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {statusCards.map(({ key, label, count, percent, badge }) => (
+          {statusCards.map(({ key, label, count, percent, badgeClass }) => (
             <article
               key={key}
               className="rounded-3xl border border-border/60 bg-gradient-to-b from-surface/95 via-surface/80 to-surface/70 p-6 shadow-medium backdrop-blur-xl transition hover:border-primary/50 hover:shadow-medium dark:border-dark-border/60 dark:from-dark-surface/70 dark:via-dark-surface/60 dark:to-dark-surface/50"
@@ -331,7 +332,7 @@ const Bookings = () => {
                 <span className="text-[11px] font-semibold uppercase tracking-[0.28em] text-text-muted dark:text-dark-text-muted">
                   {label}
                 </span>
-                <span className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wide ${badge}`}>
+                <span className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wide ${badgeClass}`}>
                   {percent}%
                 </span>
               </header>

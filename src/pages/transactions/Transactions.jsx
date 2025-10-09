@@ -1,168 +1,102 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useMediaQuery } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import { deleteResource, fetchTransactions } from "../../api/services.js";
+import { extractApiErrorMessage } from "../../utils/error.js";
+import useWindowSize from "../../hooks/useWindowSize.js";
 
 dayjs.extend(relativeTime);
 
-const extractArray = (payload, key) => {
-  if (Array.isArray(payload)) return payload;
-  if (Array.isArray(payload?.[key])) return payload[key];
-  if (Array.isArray(payload?.data)) return payload.data;
-  if (Array.isArray(payload?.results)) return payload.results;
-  return [];
-};
-
-const coerceDate = (value) => {
-  if (!value) return null;
-  const date = dayjs(value);
-  return date.isValid() ? date : null;
-};
-
-const coerceNumber = (value) => {
-  if (value === null || value === undefined) return null;
-  if (typeof value === "number") return Number.isFinite(value) ? value : null;
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : null;
-};
-
-const formatBookingCode = (value) => {
-  if (!value) return "—";
-  const stringValue = String(value).trim();
-  if (!stringValue) return "—";
-  if (/^BK-[A-Z0-9]{4}-[A-Z0-9]{4}$/i.test(stringValue)) {
-    return stringValue.toUpperCase();
+const formatCurrency = (amount, currency = "INR") => {
+  const numeric = typeof amount === "number" ? amount : Number(amount);
+  if (!Number.isFinite(numeric)) {
+    return "—";
   }
-  const sanitized = stringValue.replace(/[^a-zA-Z0-9]/g, "");
-  if (!sanitized.length) return "—";
-  const prefix = sanitized.slice(0, 4).toUpperCase();
-  const suffix = sanitized.slice(-4).toUpperCase();
-  return `BK-${prefix}-${suffix}`;
+
+  try {
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: currency.toUpperCase(),
+      maximumFractionDigits: 0,
+    }).format(numeric);
+  } catch {
+    return `${currency.toUpperCase()} ${numeric.toLocaleString("en-IN")}`;
+  }
 };
 
-const normalizeTransaction = (raw) => {
-  if (!raw || typeof raw !== "object") return null;
+const ensureDayjs = (value) => {
+  if (!value) return null;
+  const instance = dayjs(value);
+  return instance.isValid() ? instance : null;
+};
 
-  const amountValue = coerceNumber(
-    raw.amount ??
-      raw.transaction?.amount ??
-      raw.booking?.totalAmount ??
-      raw.payment?.amount
-  );
+const generateFallbackId = () => {
+  const generator = globalThis.crypto?.randomUUID;
+  if (typeof generator === "function") {
+    return generator.call(globalThis.crypto);
+  }
+  return `txn-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+};
 
-  const createdAtValue = coerceDate(
-    raw.createdAt || raw.booking?.createdAt || raw.payment?.createdAt
-  );
+const normalizeTransaction = (transaction = {}) => {
+  const transactionId = transaction.id || transaction._id || transaction.reference || generateFallbackId();
+  const booking = transaction.booking || {};
+  const hotel = transaction.hotel || booking.hotel || {};
+  const user = transaction.user || booking.user || {};
+  const metadata = transaction.metadata || {};
 
-  const methodValue = (
-    raw.method ||
-    raw.payment?.method ||
-    raw.booking?.payment?.method ||
-    "manual"
-  )
-    .toString()
-    .toLowerCase();
-
-  const statusValue = (
-    raw.status ||
-    raw.booking?.status ||
-    raw.transaction?.status ||
-    "pending"
-  ).toString();
-
-  const currencyValue = (
-    raw.currency ||
-    raw.transaction?.currency ||
-    raw.booking?.currency ||
-    "INR"
-  )
-    .toString()
-    .toUpperCase();
-
-  const bookingId = raw.booking?._id || raw.bookingId || null;
-  const bookingCodeSource =
-    bookingId ||
-    raw.booking?.reference ||
-    raw.bookingCode ||
-    raw.booking?.code ||
-    raw.booking?.bookingCode ||
-    raw.reference;
-  const bookingCode = bookingCodeSource ? formatBookingCode(bookingCodeSource) : "—";
+  const createdAt = ensureDayjs(transaction.createdAt);
+  const updatedAt = ensureDayjs(transaction.updatedAt);
 
   return {
-    id: raw._id || raw.id,
-    reference: raw.reference || raw.transaction?.reference || raw.rawReference || null,
-    bookingId,
-    bookingCode,
-    guestName:
-      raw.user?.username ||
-      raw.user?.email ||
-      raw.booking?.user?.username ||
-      raw.booking?.user?.email ||
-      raw.guestName ||
-      "—",
-    guestEmail:
-      raw.user?.email ||
-      raw.booking?.user?.email ||
-      raw.billingEmail ||
-      "",
-    hotelName:
-      raw.hotel?.name || raw.booking?.hotel?.name || raw.hotelName || "—",
-    hotelCity: raw.hotel?.city || raw.booking?.hotel?.city || "—",
-    amount: amountValue,
-    currency: currencyValue,
-    method: methodValue,
-    paymentGateway:
-      raw.paymentGateway ||
-      raw.transaction?.paymentGateway ||
-      raw.gateway ||
-      "StayPay",
-    status: statusValue,
-    cardBrand: raw.cardBrand || raw.payment?.cardBrand || null,
-    cardLast4: raw.cardLast4 || raw.payment?.cardLast4 || null,
-    billingName:
-      raw.billingName || raw.payment?.billingName || raw.user?.billingName || null,
-    billingEmail:
-      raw.billingEmail || raw.payment?.billingEmail || raw.user?.billingEmail || raw.user?.email || null,
-    notes: raw.notes || raw.payment?.notes || null,
-    createdAt: createdAtValue,
-    raw,
+    id: transactionId,
+    raw: transaction,
+    amount: transaction.amount ?? booking.totalAmount ?? null,
+    currency: (transaction.currency || booking.currency || "INR").toUpperCase(),
+    reference: transaction.reference || booking.reference || booking.code || transactionId,
+    notes: transaction.notes || metadata.note || metadata.comment || "",
+    bookingId: booking._id || booking.id || transaction.bookingId || transaction.booking?._id || "",
+    bookingCode: booking.code || booking.reference || booking.bookingCode || booking._id || "",
+    hotelName: hotel.name || hotel.title || "",
+    hotelCity: hotel.city || hotel.location || "",
+    guestName: transaction.billingName || user.username || `${user.firstName || ""} ${user.lastName || ""}`.trim() || booking.guestName || "",
+    guestEmail: transaction.billingEmail || user.email || booking.guestEmail || "",
+    method: transaction.method || transaction.paymentMethod || metadata.method || "manual",
+    paymentGateway: transaction.paymentGateway || metadata.gateway || "StayPay",
+    cardBrand: transaction.cardBrand || metadata.cardBrand || "",
+    cardLast4: transaction.cardLast4 || metadata.cardLast4 || "",
+    status: transaction.status || booking.status || metadata.status || "pending",
+    createdAt,
+    updatedAt,
   };
 };
-
-const formatCurrency = (value, currency = "INR") =>
-  typeof value === "number"
-    ? value.toLocaleString("en-IN", {
-        style: "currency",
-        currency,
-        minimumFractionDigits: 0,
-      })
-    : "—";
 
 const Transactions = () => {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [deletingId, setDeletingId] = useState("");
-  const isCompact = useMediaQuery("(max-width: 1280px)");
+
+  const { width } = useWindowSize();
+  const isCompact = (width || 0) < 1024;
 
   const loadTransactions = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const data = await fetchTransactions({ limit: 100 });
-      const normalized = extractArray(data, "transactions")
-        .map(normalizeTransaction)
-        .filter(Boolean);
-      setTransactions(normalized);
+      const response = await fetchTransactions({ limit: 200 });
+      const list = Array.isArray(response) ? response : response?.transactions;
+      if (!Array.isArray(list)) {
+        throw new Error("Transactions response malformed");
+      }
+      setTransactions(list.map((item) => normalizeTransaction(item)));
     } catch (err) {
-      setError(err?.response?.data?.message || err?.message || "Failed to fetch transactions");
+      setError(extractApiErrorMessage(err, "Failed to load transactions"));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [setTransactions, setLoading, setError]);
 
   useEffect(() => {
     loadTransactions();
@@ -180,7 +114,7 @@ const Transactions = () => {
       await deleteResource("transactions", transactionId);
       setTransactions((prev) => prev.filter((txn) => txn.id !== transactionId));
     } catch (err) {
-      setError(err?.response?.data?.message || err?.message || "Failed to delete transaction");
+      setError(extractApiErrorMessage(err, "Failed to delete transaction"));
     } finally {
       setDeletingId("");
     }

@@ -3,29 +3,29 @@ import { Link, useLocation } from "react-router-dom";
 import { DataGrid } from "@mui/x-data-grid";
 import useWindowSize from "../../hooks/useWindowSize.js";
 import { deleteResource, fetchCollection } from "../../api/services.js";
+import { extractApiErrorMessage } from "../../utils/error.js";
 
 const Datatable = ({ columns }) => {
   const location = useLocation();
   const path = location.pathname.split("/")[1];
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState("");
   const [toast, setToast] = useState(null);
   const { width } = useWindowSize();
 
   const isMobile = (width || 0) < 640;
 
-  const errorMessage =
-    error?.response?.data?.message || error?.message || (error ? "Failed to load data" : "");
+  const errorMessage = error || "";
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const data = await fetchCollection(path);
       setRows(Array.isArray(data) ? data : []);
-      setError(null);
+      setError("");
     } catch (err) {
-      setError(err);
+      setError(extractApiErrorMessage(err, "Failed to load data"));
     } finally {
       setLoading(false);
     }
@@ -68,9 +68,8 @@ const Datatable = ({ columns }) => {
         setRows((prev) => prev.filter((item) => item._id !== id));
         setToast({ type: "success", message: `${resourceLabel} deleted successfully.` });
       } catch (err) {
-        setError(err);
-        const message =
-          err?.response?.data?.message || err?.message || `Unable to delete ${resourceSingular}.`;
+        const message = extractApiErrorMessage(err, `Unable to delete ${resourceSingular}.`);
+        setError(message);
         setToast({ type: "error", message });
       }
     },
